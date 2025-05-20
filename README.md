@@ -7,5 +7,5 @@ This is a prototype of an automatic differentiation engine. It is designed to pa
 To install the required dependencies, run the following command:
 
 ```bash
-uv install
+uv sync
 ```

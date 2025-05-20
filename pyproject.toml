@@ -4,7 +4,59 @@ version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.13"
+authors = [{ name = "johnnyxcy", email = "johnny.xcy1997@outlook.com" }]
+
 dependencies = ["numpy>=2.2.6", "polars>=1.29.0", "sympy>=1.14.0"]
+
+[tool.uv]
+
+[[tool.uv.index]]
+name = "tsinghua"
+url = "https://pypi.tuna.tsinghua.edu.cn/simple/"
+default = true
+
+[tool.hatch.build.targets.sdist]
+include = ["src"]
+
+[tool.hatch.build.targets.wheel]
+include = ["src"]
+
+[tool.pyright]
+typeCheckingMode = "standard"
+pythonVersion = "3.13"
+include = ["src"]
+
+strictListInference = true
+strictDictionaryInference = true
+strictSetInference = true
+
+reportInvalidTypeVarUse = "error"
+reportDuplicateImport = "error"
+reportInconsistentConstructor = "error"
+reportMatchNotExhaustive = "error"
+reportUnnecessaryCast = "error"
+reportUntypedClassDecorator = "error"
+reportUntypedFunctionDecorator = "error"
+reportUntypedNamedTuple = "error"
+
+[tool.ruff]
+line-length = 88
+indent-width = 4
+
+[tool.ruff.lint]
+fixable = ["ALL"]
+extend-select = ["D300"]
+extend-ignore = ["F403", "F405", "E741"]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.ruff.format]
+docstring-code-format = true
+
+[tool.ruff.lint.per-file-ignores]
+"__init__.py" = ["E402", "F403"]
+"**/__tests__/*" = ["D"]
 
 [dependency-groups]
 dev = ["ruff>=0.11.10"]
