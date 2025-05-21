@@ -1,7 +1,7 @@
 import libcst as cst
 import pytest
 
-from mtran.inline_func_transpile import InlineFunctionTranspiler
+from mtran.transformers.inline_func_transpile import InlineFunctionTranspiler
 
 
 def add(a, b=1):
