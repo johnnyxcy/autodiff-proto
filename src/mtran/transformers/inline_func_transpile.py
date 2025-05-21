@@ -14,13 +14,13 @@ from libcst.metadata import (
 from mtran.eval import eval_token
 
 
-class Renamer(Protocol):
+class Mangler(Protocol):
     def __call__(self, name: str) -> str:
         """Rename a variable name."""
         ...
 
 
-class LocalVariableRenamer(cst.CSTTransformer):
+class LocalVariableMangler(cst.CSTTransformer):
     """
     A CSTTransformer that renames local variable names in a Python syntax tree.
 
@@ -31,14 +31,14 @@ class LocalVariableRenamer(cst.CSTTransformer):
 
     Attributes:
         METADATA_DEPENDENCIES (tuple): Required metadata providers for parent node, scope, and expression context.
-        _renamer (Renamer): A callable that takes a variable name and returns its new name.
+        _mangler (Mangler): A callable that takes a variable name and returns its new name.
         _names (list[str]): List of variable names that have already been renamed.
 
     Methods:
         visit_Name(node):
             Records variable names in store context to avoid renaming them multiple times.
         leave_Name(original_node, updated_node):
-            Renames variable names in store context using the provided renamer function.
+            Renames variable names in store context using the provided Mangler function.
     """
 
     METADATA_DEPENDENCIES = (
@@ -47,9 +47,9 @@ class LocalVariableRenamer(cst.CSTTransformer):
         ExpressionContextProvider,
     )
 
-    def __init__(self, renamer: Renamer):
+    def __init__(self, Mangler: Mangler):
         super().__init__()
-        self._renamer = renamer
+        self._mangler = Mangler
         self._names: list[str] = []
 
     def visit_Name(self, node: cst.Name):
@@ -64,7 +64,7 @@ class LocalVariableRenamer(cst.CSTTransformer):
         # Rename the variable name if is store
         name = updated_node.value
         if name in self._names:
-            new_name = self._renamer(updated_node.value)
+            new_name = self._mangler(updated_node.value)
             if new_name != name:
                 return updated_node.with_changes(value=new_name)
         return updated_node
@@ -172,9 +172,9 @@ class InlineFunctionTranspiler(cst.CSTTransformer):
             # Rename the function arguments to avoid name clashes
             return f"__{func_name}__{name}"
 
-        renamer = LocalVariableRenamer(renamer=rename_)
+        Mangler = LocalVariableMangler(Mangler=rename_)
         wrapped = MetadataWrapper(cst.Module(body=[func_def]))
-        renamed = wrapped.visit(renamer)
+        renamed = wrapped.visit(Mangler)
         func_def = cst.ensure_type(
             cst.ensure_type(renamed, cst.Module).body[0],
             cst.FunctionDef,
