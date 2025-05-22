@@ -560,33 +560,45 @@ class Compartment:
         rate: float | None = None,
         duration: float | None = None,
     ) -> None:
-        self.__name = name
-        self.__init_value = CmtInitialA(cmt=self)
+        self._name = name
+        self._init_value = CmtInitialA(cmt=self)
         if init_value:
-            self.__init_value._expr = init_value
+            self._init_value._expr = init_value
 
-        self.__default_dose = default_dose
-        self.__default_obs = default_obs
+        self._default_dose = default_dose
+        self._default_obs = default_obs
 
-        self.__dAdt = CmtDADt(cmt=self)
+        self._dAdt = CmtDADt(cmt=self)
 
-        self.__alag = CmtAlag(cmt=self)
+        self._alag = CmtAlag(cmt=self)
         if alag is not None:
-            self.__alag._expr = alag
+            self._alag._expr = alag
 
-        self.__fraction = CmtFraction(cmt=self)
+        self._fraction = CmtFraction(cmt=self)
         if fraction is not None:
-            self.__fraction._expr = fraction
+            self._fraction._expr = fraction
 
-        self.__rate = CmtRate(cmt=self)
+        self._rate = CmtRate(cmt=self)
         if rate is not None:
-            self.__rate._expr = rate
+            self._rate._expr = rate
 
-        self.__duration = CmtDuration(cmt=self)
+        self._duration = CmtDuration(cmt=self)
         if duration is not None:
-            self.__duration._expr = duration
+            self._duration._expr = duration
 
-        self.__A = CmtSolvedA(cmt=self)
+        self._A = CmtSolvedA(cmt=self)
+
+    def __deepcopy__(self, memo: typing.Any) -> Compartment:
+        return Compartment(
+            name=self._name,
+            init_value=self._init_value._expr,
+            default_dose=self.default_dose,
+            default_obs=self.default_obs,
+            alag=self.alag._expr,
+            fraction=self._fraction._expr,
+            rate=self._rate._expr,
+            duration=self._duration._expr,
+        )
 
     @property
     def A(self) -> CmtSolvedA:
@@ -608,7 +620,7 @@ class Compartment:
         >>>         self.cmt_depot.dAdt = (-ka) * self.cmt_depot.A
         >>>         ...
         """
-        return self.__A
+        return self._A
 
     @property
     def dAdt(self) -> CmtDADt:
@@ -630,14 +642,14 @@ class Compartment:
         >>>         self.cmt_depot.dAdt = (-ka) * self.cmt_depot.A
         >>>         ...
         """
-        return self.__dAdt
+        return self._dAdt
 
     @dAdt.setter
     def dAdt(self, val: Expression) -> None:
         if not isinstance(val, int | float | Expr):
             raise TypeError()
 
-        self.__dAdt._expr = val
+        self._dAdt._expr = val
 
     @property
     def name(self) -> str:
@@ -655,17 +667,17 @@ class Compartment:
         >>> model.cmt_depot.name
         cmt_depot
         """
-        return self.__name
+        return self._name
 
     @name.setter
     def name(self, val: str) -> None:
-        self.__name = val
-        self.__A.name = f"A_{val}"
-        self.__dAdt.name = f"dA_{val}dt"
-        self.__alag.name = f"Alag_{val}"
-        self.__fraction.name = f"Fraction_{val}"
-        self.__rate.name = f"Rate_{val}"
-        self.__duration.name = f"Duration_{val}"
+        self._name = val
+        self._A.name = f"A_{val}"
+        self._dAdt.name = f"dA_{val}dt"
+        self._alag.name = f"Alag_{val}"
+        self._fraction.name = f"Fraction_{val}"
+        self._rate.name = f"Rate_{val}"
+        self._duration.name = f"Duration_{val}"
 
     @property
     def alag(self) -> CmtAlag:
@@ -688,13 +700,13 @@ class Compartment:
         >>>         self.cmt_depot.dAdt = (-ka) * self.cmt_depot.A
         >>>         ...
         """
-        return self.__alag
+        return self._alag
 
     @alag.setter
     def alag(self, val: Expression) -> None:
         if not isinstance(val, int | float | Expr):
             raise TypeError()
-        self.__alag._expr = val
+        self._alag._expr = val
 
     @property
     def fraction(self) -> CmtFraction:
@@ -715,13 +727,13 @@ class Compartment:
         >>>         self.cmt_depot.dAdt = (-ka) * self.cmt_depot.A
         >>>         ...
         """
-        return self.__fraction
+        return self._fraction
 
     @fraction.setter
     def fraction(self, val: Expression) -> None:
         if not isinstance(val, int | float | Expr):
             raise TypeError()
-        self.__fraction._expr = val
+        self._fraction._expr = val
 
     @property
     def rate(self) -> CmtRate:
@@ -744,13 +756,13 @@ class Compartment:
         >>>         self.cmt_central.dAdt = -k * self.cmt_central.A
         >>>         ...
         """
-        return self.__rate
+        return self._rate
 
     @rate.setter
     def rate(self, val: Expression) -> None:
         if not isinstance(val, Expression):
             raise TypeError()
-        self.__rate._expr = val
+        self._rate._expr = val
 
     @property
     def duration(self) -> CmtDuration:
@@ -773,13 +785,13 @@ class Compartment:
         >>>         self.cmt_central.dAdt = -k * self.cmt_central.A
         >>>         ...
         """
-        return self.__duration
+        return self._duration
 
     @duration.setter
     def duration(self, val: Expression) -> None:
         if not isinstance(val, Expression):
             raise TypeError()
-        self.__duration._expr = val
+        self._duration._expr = val
 
     @property
     def init_value(self) -> CmtInitialA:
@@ -802,13 +814,13 @@ class Compartment:
         >>>         self.cmt_central.dAdt = -k * self.cmt_central.A
         >>>         ...
         """
-        return self.__init_value
+        return self._init_value
 
     @init_value.setter
     def init_value(self, val: Expression) -> None:
         if not isinstance(val, int | float | Expr):
             raise TypeError()
-        self.__init_value._expr = val
+        self._init_value._expr = val
 
     @property
     def default_dose(self) -> bool:
@@ -826,7 +838,7 @@ class Compartment:
         >>> model.cmt_depot.default_dose
         True
         """
-        return self.__default_dose
+        return self._default_dose
 
     @property
     def default_obs(self) -> bool:
@@ -844,7 +856,7 @@ class Compartment:
         >>> model.cmt_central.default_obs
         True
         """
-        return self.__default_obs
+        return self._default_obs
 
     def __getitem__(
         self, __key: str | tuple[str, SymVar] | tuple[str, SymVar, SymVar]
