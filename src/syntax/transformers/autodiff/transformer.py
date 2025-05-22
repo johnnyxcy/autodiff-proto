@@ -33,8 +33,6 @@ from syntax.metadata.scope_provider import (
     ScopeProvider,
 )
 from syntax.rethrow import rethrow
-
-# from mtran.transformers.self_attr import mangle_self_attr
 from syntax.unparse import unparse
 from syntax.with_comment import with_comment
 

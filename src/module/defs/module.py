@@ -7,27 +7,26 @@ import typing
 
 from symbols._column import AnyColVar, ColVarCollection
 from symbols._symvar import SymVar
-from typings import Expression
 from utils.inspect_hack import inspect
 
-__all__ = ["Module", "ModuleT"]
+if typing.TYPE_CHECKING:
+    from typings import Expression  # noqa: F401
+
+
+__all__ = ["ModuleMetaclass", "Module", "ModuleT"]
 
 T = typing.TypeVar("T")
 
 
-class type(builtins.type):
-    def __call__(
-        cls: typing.Type[T],
-        *args: typing.Any,
-        **kwargs: typing.Any,
-    ) -> T:
+class ModuleMetaclass(builtins.type):
+    def __call__(cls: typing.Type[T], *args: typing.Any, **kwargs: typing.Any) -> T:
         obj = builtins.type.__call__(cls, *args, **kwargs)
         if hasattr(obj, "__post_init__"):
             obj.__post_init__()
         return obj
 
 
-class Module(object, metaclass=type):
+class Module(object, metaclass=ModuleMetaclass):
     """Base class for all Masmod modules.
 
     Examples

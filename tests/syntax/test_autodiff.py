@@ -13,10 +13,6 @@ def _transform(src: str, transformer: AutoDiffTransformer):
     """
     Visit the source code with the given transformer.
     """
-    # m = cst.MetadataWrapper(cst.parse_module(src)).visit(SelfAttrMangler())
-
-    # transformer._source_code = m.code
-
     return cst.MetadataWrapper(cst.parse_module(src)).visit(transformer)
 
 
