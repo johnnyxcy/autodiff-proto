@@ -1,3 +1,5 @@
+from typing import Protocol, runtime_checkable
+
 import libcst as cst
 from sympy import (
     Add,
@@ -19,8 +21,13 @@ from sympy import (
 from sympy.core.relational import Relational
 
 
-# from mtran.transformers.self_attr import mangle_self_attr
-from symbols._x import XWrt
+@runtime_checkable
+class Cstifiable(Protocol):
+    def as_cst(self) -> cst.BaseAssignTargetExpression:
+        """
+        Convert the XWrt object to a CST expression.
+        """
+        ...
 
 
 def parse_sympy_expr(expr: Basic | int | float) -> cst.BaseExpression:
@@ -51,7 +58,7 @@ def parse_sympy_expr(expr: Basic | int | float) -> cst.BaseExpression:
 
     if isinstance(expr, Symbol):
         # We have many symbols that needed to be handled
-        if isinstance(expr, XWrt):
+        if isinstance(expr, Cstifiable):
             # This is a special case, we need to handle it
             return expr.as_cst()
         return cst.Name(value=expr.name)
@@ -147,6 +154,8 @@ def parse_sympy_expr(expr: Basic | int | float) -> cst.BaseExpression:
                 raise NotImplementedError(
                     "Only single variable differentiation is supported"
                 )
+            from symbols._x import XWrt
+
             return XWrt(on_name, wrt[0]).as_cst()
 
     raise NotImplementedError(f"Unknown expression type: {type(expr)}")

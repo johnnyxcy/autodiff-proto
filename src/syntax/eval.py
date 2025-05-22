@@ -2,8 +2,8 @@ from typing import Any
 
 import libcst as cst
 
-from mtran.rethrow import rethrow
-from mtran.unparse import unparse
+from syntax.rethrow import rethrow
+from syntax.unparse import unparse
 
 
 def eval_token(

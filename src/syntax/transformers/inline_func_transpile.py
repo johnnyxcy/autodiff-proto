@@ -11,7 +11,7 @@ from libcst.metadata import (
     ScopeProvider,
 )
 
-from mtran.eval import eval_token
+from syntax.eval import eval_token
 
 
 class Mangler(Protocol):

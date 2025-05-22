@@ -1,6 +1,6 @@
 import libcst as cst
 
-from mtran.transformers.super_call_fixer import SuperCallFixer
+from syntax.transformers.super_call_fixer import SuperCallFixer
 
 
 def test_super_call_fixer():

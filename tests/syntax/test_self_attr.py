@@ -2,9 +2,9 @@ import inspect
 
 import libcst as cst
 
-from mtran.transformers.self_attr import SelfAttrMangler
-from mtran.unparse import unparse
 from symbols._symvar import SymVar
+from syntax.transformers.self_attr import SelfAttrMangler
+from syntax.unparse import unparse
 
 
 def test_simple_symbols():

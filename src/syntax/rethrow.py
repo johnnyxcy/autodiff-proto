@@ -5,7 +5,7 @@ import libcst as cst
 from libcst._position import CodeRange
 from libcst.metadata import PositionProvider
 
-from mtran.unparse import unparse
+from syntax.unparse import unparse
 
 
 class MTranError(BaseException):

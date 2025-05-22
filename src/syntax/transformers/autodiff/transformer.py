@@ -25,18 +25,18 @@ from sympy.parsing.sympy_parser import (
     repeated_decimals,
 )
 
-from mtran.metadata.scope_provider import (
-    Scope,
-    ScopeProvider,
-)
-from mtran.rethrow import rethrow
-
-# from mtran.transformers.self_attr import mangle_self_attr
-from mtran.unparse import unparse
-from mtran.with_comment import with_comment
 from symbols._symvar import SymVar
 from symbols._x import XWrt
 from symbols.to_cst import parse_sympy_expr
+from syntax.metadata.scope_provider import (
+    Scope,
+    ScopeProvider,
+)
+from syntax.rethrow import rethrow
+
+# from mtran.transformers.self_attr import mangle_self_attr
+from syntax.unparse import unparse
+from syntax.with_comment import with_comment
 
 
 def auto_symbol(tokens: list[TOKEN], local_dict: DICT, global_dict: DICT):

@@ -4,9 +4,9 @@ import libcst as cst
 import pytest
 from sympy import exp
 
-from mtran.rethrow import MTranError
-from mtran.transformers.autodiff.transformer import AutoDiffTransformer
 from symbols._symvar import SymVar
+from syntax.rethrow import MTranError
+from syntax.transformers.autodiff.transformer import AutoDiffTransformer
 
 
 def _transform(src: str, transformer: AutoDiffTransformer):

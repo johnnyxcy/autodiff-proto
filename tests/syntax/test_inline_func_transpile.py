@@ -1,7 +1,7 @@
 import libcst as cst
 import pytest
 
-from mtran.transformers.inline_func_transpile import InlineFunctionTranspiler
+from syntax.transformers.inline_func_transpile import InlineFunctionTranspiler
 
 
 def add(a, b=1):
@@ -119,7 +119,7 @@ def test_invalid_function():
     transpiler = InlineFunctionTranspiler(
         source_code, locals(), globals(), inline_return=True
     )
-    with pytest.raises(SyntaxError):
+    with pytest.raises(NameError):
         updated_code = (
             cst.MetadataWrapper(
                 cst.parse_module(source_code),

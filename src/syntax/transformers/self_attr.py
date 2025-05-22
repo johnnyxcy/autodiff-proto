@@ -1,7 +1,7 @@
 import libcst as cst
 from libcst.metadata import ExpressionContext, ExpressionContextProvider
 
-from mtran.with_comment import with_comment
+from syntax.with_comment import with_comment
 
 MANGLE_PREFIX = "__self__"
 

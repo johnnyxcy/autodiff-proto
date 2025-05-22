@@ -4,9 +4,10 @@ import libcst as cst
 from sympy import Expr, Symbol
 
 from symbols._symvar import SymVar
+from symbols.to_cst import Cstifiable
 
 
-class XWrt(Symbol):
+class XWrt(Symbol, Cstifiable):
     """
     A class to represent an arbitrary variable X with respect to a symvar wrt.
 
@@ -28,13 +29,6 @@ class XWrt(Symbol):
     @property
     def wrt2nd(self) -> SymVar | None:
         return self._wrt2nd
-
-    def __repr__(self) -> str:
-        s = f"XWrt({self.name}, {self.wrt}"
-        if self.wrt2nd is not None:
-            s += f", {self.wrt2nd}"
-        s += ")"
-        return s
 
     def as_cst(self) -> cst.BaseAssignTargetExpression:
         """
@@ -66,11 +60,13 @@ class XWrt(Symbol):
             )
             slice.append(wrt2nd)
 
-        return cst.Subscript(value=cst.Name(XWrtIndexer.name), slice=slice)
+        return cst.Subscript(value=cst.Name(XWrtRack.name), slice=slice)
 
 
-class XWrtIndexer:
-    """Representing any variable X with respect to symvar wrt."""
+class XWrtRack:
+    """
+    Representing a dummy getter for the derivatives of any arbitrary variable X to be used in MTran.
+    """
 
     name = "__X__"
 
