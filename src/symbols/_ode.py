@@ -1,13 +1,15 @@
 from __future__ import annotations
 
 import typing
+from uuid import uuid4
 
+import libcst as cst
 from sympy import Expr, Number, Symbol
 
 from symbols._args import ParamArg, ParamArgWrt, ParamsArgRack
 from symbols._symvar import SymVar
 from symbols.to_cst import Cstifiable
-from typings import Expression
+from typings import Expression, ValueType
 
 
 class IntegralT(Symbol):
@@ -17,38 +19,7 @@ class IntegralT(Symbol):
 INTEGRAL_T: typing.Final[IntegralT] = IntegralT("__t")
 
 
-class DADt(Symbol):
-    """Class of compartment dAdt.
-
-    Attributes
-    ----------
-    cmt : Compartment
-        Corresponding compartment.
-    expr : Expression
-        Expression of dAdt.
-    """
-
-    __slots__ = ("_cmt", "_expr")
-
-    def __new__(cls, cmt: Compartment) -> DADt:
-        name = f"dA_{cmt.name}dt"
-        instance = typing.cast(DADt, super().__new__(cls, name))
-        instance._cmt = cmt
-        instance._expr = Number(0.0)
-        return instance
-
-    @property
-    def cmt(self) -> Compartment:
-        """Compartment: Corresponding compartment."""
-        return self._cmt
-
-    @property
-    def expr(self) -> Expression:
-        """Expression: Expression of dAdt."""
-        return self._expr
-
-
-class Alag(Symbol):
+class CmtAlag(Symbol):
     """Class of compartment absorption lag.
 
     Attributes
@@ -61,9 +32,9 @@ class Alag(Symbol):
 
     __slots__ = ("_cmt", "_expr")
 
-    def __new__(cls, cmt: Compartment) -> Alag:
+    def __new__(cls, cmt: Compartment) -> CmtAlag:
         name = f"Alag_{cmt.name}"
-        instance = typing.cast(Alag, super().__new__(cls, name))
+        instance = typing.cast(CmtAlag, super().__new__(cls, name))
         instance._cmt = cmt
         instance._expr = 0.0
         return instance
@@ -79,7 +50,7 @@ class Alag(Symbol):
         return self._expr
 
 
-class Fraction(Symbol):
+class CmtFraction(Symbol):
     """Class of compartment bioavailability fraction.
 
     Attributes
@@ -92,9 +63,9 @@ class Fraction(Symbol):
 
     __slots__ = ("_cmt", "_expr")
 
-    def __new__(cls, cmt: Compartment) -> Fraction:
-        name = f"Frac_{cmt.name}"
-        instance = typing.cast(Fraction, super().__new__(cls, name))
+    def __new__(cls, cmt: Compartment) -> CmtFraction:
+        name = f"Fraction_{cmt.name}"
+        instance = typing.cast(CmtFraction, super().__new__(cls, name))
         instance._cmt = cmt
         instance._expr = 1.0
         return instance
@@ -110,7 +81,7 @@ class Fraction(Symbol):
         return self._expr
 
 
-class Rate(Symbol):
+class CmtRate(Symbol):
     """Class of compartment dose rate.
 
     Attributes
@@ -123,9 +94,9 @@ class Rate(Symbol):
 
     __slots__ = ("_cmt", "_expr")
 
-    def __new__(cls, cmt: Compartment) -> Rate:
-        name = f"R_{cmt.name}"
-        instance = typing.cast(Rate, super().__new__(cls, name))
+    def __new__(cls, cmt: Compartment) -> CmtRate:
+        name = f"Rate_{cmt.name}"
+        instance = typing.cast(CmtRate, super().__new__(cls, name))
         instance._cmt = cmt
         instance._expr = 0.0
         return instance
@@ -141,7 +112,7 @@ class Rate(Symbol):
         return self._expr
 
 
-class Duration(Symbol):
+class CmtDuration(Symbol):
     """Class of compartment dose duration.
 
     Attributes
@@ -154,9 +125,9 @@ class Duration(Symbol):
 
     __slots__ = ("_cmt", "_expr")
 
-    def __new__(cls, cmt: Compartment) -> Duration:
-        name = f"D_{cmt.name}"
-        instance = typing.cast(Duration, super().__new__(cls, name))
+    def __new__(cls, cmt: Compartment) -> CmtDuration:
+        name = f"Duration_{cmt.name}"
+        instance = typing.cast(CmtDuration, super().__new__(cls, name))
         instance._cmt = cmt
         instance._expr = 0.0
         return instance
@@ -203,7 +174,7 @@ class CmtInitialA(Symbol):
         return self._expr
 
 
-class CmtSolvedA(Symbol):
+class CmtSolvedA(Symbol, Cstifiable):
     """Class of solved compartment amounts.
 
     Attributes
@@ -225,17 +196,36 @@ class CmtSolvedA(Symbol):
         """Compartment: Corresponding compartment."""
         return self._cmt
 
+    def as_cst(self) -> cst.BaseAssignTargetExpression:
+        """
+        Convert the CmtSolvedA object to a CST expression.
+        """
 
-class AWrt(Symbol):
+        return cst.Subscript(
+            value=cst.Name(CmtSolvedARack.name),
+            slice=[
+                cst.SubscriptElement(
+                    slice=cst.Index(
+                        cst.Attribute(
+                            value=cst.Name("self"),
+                            attr=cst.Name(self.name),
+                        )
+                    ),
+                ),
+            ],
+        )
+
+
+class CmtSolvedAWrt(Symbol, Cstifiable):
     __slots__ = ("_cmt", "_wrt", "_wrt2nd")
 
     def __new__(
         cls, cmt: Compartment, wrt: SymVar, wrt2nd: SymVar | None = None
-    ) -> AWrt:
+    ) -> CmtSolvedAWrt:
         name = f"dA_{cmt.name}_d{wrt.name}"
         if wrt2nd:
             name += f"_d{wrt2nd.name}"
-        instance = typing.cast(AWrt, super().__new__(cls, name))
+        instance = typing.cast(CmtSolvedAWrt, super().__new__(cls, name))
         instance._cmt = cmt
         instance._wrt = wrt
         instance._wrt2nd = wrt2nd
@@ -253,21 +243,147 @@ class AWrt(Symbol):
     def wrt2nd(self) -> SymVar | None:
         return self._wrt2nd
 
+    def as_cst(self) -> cst.BaseAssignTargetExpression:
+        """
+        Convert the CmtSolvedAWrt object to a CST expression.
+        """
+        slice = [
+            cst.SubscriptElement(
+                slice=cst.Index(
+                    cst.Attribute(
+                        value=cst.Name("self"),
+                        attr=cst.Name(self.name),
+                    )
+                ),
+            ),
+        ]
+        wrt1st = cst.SubscriptElement(
+            cst.Index(
+                cst.Attribute(
+                    value=cst.Name("self"),
+                    attr=cst.Name(self.wrt.name),
+                )
+            )
+        )
+        slice.append(wrt1st)
 
-class DADtWrt(Symbol):
+        if self.wrt2nd is not None:
+            wrt2nd = cst.SubscriptElement(
+                cst.Index(
+                    cst.Attribute(
+                        value=cst.Name("self"),
+                        attr=cst.Name(self.wrt2nd.name),
+                    )
+                )
+            )
+            slice.append(wrt2nd)
+
+        return cst.Subscript(value=cst.Name(CmtSolvedARack.name), slice=slice)
+
+
+class CmtSolvedARack:
+    """
+    Representing a dummy getter for the amounts of any arbitrary compartment to be used in MTran.
+    """
+
+    name = "__A__"
+
+    def __setitem__(self, key: typing.Any, value: typing.Any) -> None:
+        raise NotImplementedError()
+
+    @typing.overload
+    def __getitem__(self, key: Compartment) -> CmtSolvedA:
+        """Get the amount in the compartment at time `t`."""
+        ...
+
+    @typing.overload
+    def __getitem__(
+        self, key: tuple[Compartment, SymVar] | tuple[Compartment, SymVar, SymVar]
+    ) -> CmtSolvedAWrt:
+        """Get the derivative of amount in the compartment with respect to a variable."""
+        ...
+
+    def __getitem__(
+        self,
+        key: Compartment
+        | tuple[Compartment, SymVar]
+        | tuple[Compartment, SymVar, SymVar],
+    ) -> CmtSolvedA | CmtSolvedAWrt:
+        if isinstance(key, tuple):
+            if len(key) == 2:  # first order
+                cmt, wrt = key
+                return CmtSolvedAWrt(cmt=cmt, wrt=wrt)
+            else:  # second order
+                cmt, wrt, wrt2nd = key
+                return CmtSolvedAWrt(cmt=cmt, wrt=wrt, wrt2nd=wrt2nd)
+        else:
+            return key.A
+
+
+class CmtDADt(Symbol, Cstifiable):
+    """Class of compartment dAdt.
+
+    Attributes
+    ----------
+    cmt : Compartment
+        Corresponding compartment.
+    expr : Expression
+        Expression of dAdt.
+    """
+
+    __slots__ = ("_cmt", "_expr")
+
+    def __new__(cls, cmt: Compartment) -> CmtDADt:
+        name = f"dA_{cmt.name}dt"
+        instance = typing.cast(CmtDADt, super().__new__(cls, name))
+        instance._cmt = cmt
+        instance._expr = Number(0.0)
+        return instance
+
+    @property
+    def cmt(self) -> Compartment:
+        """Compartment: Corresponding compartment."""
+        return self._cmt
+
+    @property
+    def expr(self) -> Expression:
+        """Expression: Expression of dAdt."""
+        return self._expr
+
+    def as_cst(self) -> cst.BaseAssignTargetExpression:
+        """
+        Convert the CmtDADt object to a CST expression.
+        """
+
+        return cst.Subscript(
+            value=cst.Name(CmtDADtRack.name),
+            slice=[
+                cst.SubscriptElement(
+                    slice=cst.Index(
+                        cst.Attribute(
+                            value=cst.Name("self"),
+                            attr=cst.Name(self.name),
+                        )
+                    ),
+                ),
+            ],
+        )
+
+
+class CmtDADtWrt(Symbol, Cstifiable):
     __slots__ = ("_cmt", "_wrt", "_wrt2nd")
 
     @typing.overload
     def __new__(
         cls, cmt: Compartment, wrt: SymVar, wrt2nd: SymVar | None = None
-    ) -> DADtWrt: ...
+    ) -> CmtDADtWrt: ...
 
     @typing.overload
-    def __new__(cls, cmt: Compartment, wrt: CmtSolvedA) -> DADtWrt: ...
+    def __new__(cls, cmt: Compartment, wrt: CmtSolvedA) -> CmtDADtWrt: ...
 
     def __new__(
         cls, cmt: Compartment, wrt: SymVar | CmtSolvedA, wrt2nd: SymVar | None = None
-    ) -> DADtWrt:
+    ) -> CmtDADtWrt:
         if isinstance(wrt, CmtSolvedA):
             wrt_name = wrt.cmt.name
         else:
@@ -275,7 +391,7 @@ class DADtWrt(Symbol):
         name = f"dA_{cmt.name}dt_d{wrt_name}"
         if wrt2nd:
             name += f"_d{wrt2nd.name}"
-        instance = typing.cast(DADtWrt, super().__new__(cls, name))
+        instance = typing.cast(CmtDADtWrt, super().__new__(cls, name))
         instance._cmt = cmt
         instance._wrt = wrt
         instance._wrt2nd = wrt2nd
@@ -292,6 +408,118 @@ class DADtWrt(Symbol):
     @property
     def wrt2nd(self) -> SymVar | None:
         return self._wrt2nd
+
+    def as_cst(self) -> cst.BaseAssignTargetExpression:
+        """
+        Convert the CmtDADtWrt object to a CST expression.
+        """
+        slice = [
+            cst.SubscriptElement(
+                slice=cst.Index(
+                    cst.Attribute(
+                        value=cst.Name("self"),
+                        attr=cst.Name(self.name),
+                    )
+                ),
+            ),
+        ]
+        wrt1st = cst.SubscriptElement(
+            cst.Index(
+                cst.Attribute(
+                    value=cst.Name("self"),
+                    attr=cst.Name(self.wrt.name),
+                )
+            )
+        )
+        slice.append(wrt1st)
+
+        if self.wrt2nd is not None:
+            wrt2nd = cst.SubscriptElement(
+                cst.Index(
+                    cst.Attribute(
+                        value=cst.Name("self"),
+                        attr=cst.Name(self.wrt2nd.name),
+                    )
+                )
+            )
+            slice.append(wrt2nd)
+
+        return cst.Subscript(value=cst.Name(CmtDADtRack.name), slice=slice)
+
+
+class CmtDADtRack:
+    """
+    Representing a dummy getter for the dAdt and corresponding derivatives of any arbitrary compartment to be used in MTran.
+    """
+
+    name = "__DADT__"
+
+    def __setitem__(self, key: typing.Any, value: typing.Any) -> None:
+        raise NotImplementedError()
+
+    @typing.overload
+    def __getitem__(self, key: Compartment) -> CmtDADt: ...
+
+    @typing.overload
+    def __getitem__(
+        self,
+        key: tuple[Compartment, SymVar | CmtSolvedA]
+        | tuple[Compartment, SymVar, SymVar],
+    ) -> CmtDADtWrt: ...
+
+    def __getitem__(
+        self,
+        key: Compartment
+        | tuple[Compartment, SymVar | CmtSolvedA]
+        | tuple[Compartment, SymVar, SymVar],
+    ) -> CmtDADt | CmtDADtWrt:
+        if isinstance(key, tuple):
+            if len(key) == 2:  # first order
+                cmt, wrt = key
+                return CmtDADtWrt(cmt=cmt, wrt=wrt)
+            else:  # second order
+                cmt, wrt, wrt2nd = key
+                return CmtDADtWrt(cmt=cmt, wrt=wrt, wrt2nd=wrt2nd)
+        else:
+            return key.dAdt
+
+
+class CmtParamArg(ParamArg):
+    def __init__(self, param_name: str, cmt: Compartment) -> None:
+        super().__init__(param_name)
+        self._cmt = cmt
+
+    @property
+    def cmt(self) -> Compartment:
+        return self._cmt
+
+    def as_cst(self) -> cst.BaseAssignTargetExpression:
+        return cst.Subscript(
+            value=cst.Name(ParamsArgRack.name),
+            slice=self._as_cst_slices(),
+        )
+
+
+class CmtParamArgWrt(ParamArgWrt):
+    def __init__(
+        self,
+        param_name: str,
+        cmt: Compartment,
+        wrt: SymVar,
+        wrt2nd: SymVar | None = None,
+    ) -> None:
+        super().__init__(param_name, wrt, wrt2nd)
+        self._cmt = cmt
+
+    @property
+    def cmt(self) -> Compartment:
+        return self._cmt
+
+    def as_cst(self) -> cst.BaseAssignTargetExpression:
+        return cst.Subscript(
+            value=cst.Name(ParamsArgRack.name),
+            slice=self._as_cst_slices(),
+        )
 
 
 class Compartment:
@@ -340,21 +568,21 @@ class Compartment:
         self.__default_dose = default_dose
         self.__default_obs = default_obs
 
-        self.__dAdt = DADt(cmt=self)
+        self.__dAdt = CmtDADt(cmt=self)
 
-        self.__alag = Alag(cmt=self)
+        self.__alag = CmtAlag(cmt=self)
         if alag is not None:
             self.__alag._expr = alag
 
-        self.__fraction = Fraction(cmt=self)
+        self.__fraction = CmtFraction(cmt=self)
         if fraction is not None:
             self.__fraction._expr = fraction
 
-        self.__rate = Rate(cmt=self)
+        self.__rate = CmtRate(cmt=self)
         if rate is not None:
             self.__rate._expr = rate
 
-        self.__duration = Duration(cmt=self)
+        self.__duration = CmtDuration(cmt=self)
         if duration is not None:
             self.__duration._expr = duration
 
@@ -383,7 +611,7 @@ class Compartment:
         return self.__A
 
     @property
-    def dAdt(self) -> DADt:
+    def dAdt(self) -> CmtDADt:
         """DADt: Derivative with respect to time `t` of the amount in compartment.
 
         Examples
@@ -440,7 +668,7 @@ class Compartment:
         self.__duration.name = f"Duration_{val}"
 
     @property
-    def alag(self) -> Alag:
+    def alag(self) -> CmtAlag:
         """Alag: Expression of absorption lag for the compartment.
 
         Examples
@@ -469,7 +697,7 @@ class Compartment:
         self.__alag._expr = val
 
     @property
-    def fraction(self) -> Fraction:
+    def fraction(self) -> CmtFraction:
         """Fraction: Expression of bioavailability fraction for the compartment.
 
         Examples
@@ -496,7 +724,7 @@ class Compartment:
         self.__fraction._expr = val
 
     @property
-    def rate(self) -> Rate:
+    def rate(self) -> CmtRate:
         """Rate: Expression of dose rate for the compartment.
 
         Examples
@@ -525,7 +753,7 @@ class Compartment:
         self.__rate._expr = val
 
     @property
-    def duration(self) -> Duration:
+    def duration(self) -> CmtDuration:
         """Duration: Expression of dose duration for the compartment.
 
         Examples
@@ -621,4 +849,56 @@ class Compartment:
     def __getitem__(
         self, __key: str | tuple[str, SymVar] | tuple[str, SymVar, SymVar]
     ) -> ParamArg | ParamArgWrt:
-        return ParamsArgRack()[__key]
+        return ParamsArgRack(
+            cls_param_arg=CmtParamArg,
+            cls_param_arg_wrt=CmtParamArgWrt,
+        )[__key]
+
+
+def compartment(
+    init_value: ValueType = 0.0,
+    alag: ValueType = 0.0,
+    fraction: ValueType = 1.0,
+    default_dose: bool = False,
+    default_obs: bool = False,
+) -> Compartment:
+    """Create a single compartment.
+
+    Parameters
+    ----------
+    init_value : ValueType, optional
+        Initial amount for the compartment. Defaults to `0`.
+    alag : ValueType, optional
+        Absorption lag for the compartment. Defaults to `0`.
+    fraction : ValueType, optional
+        Bioavailability fraction for the compartment. Defaults to `1`.
+    default_dose : bool, optional
+        Whether the compartment is default dose compartment. Defaults to `False`.
+    default_obs : bool, optional
+        Whether the compartment is default observation compartment. Defaults to `False`.
+
+    Returns
+    -------
+    Compartment
+        A compartment variable.
+
+    Examples
+    --------
+    >>> class TestModel(OdeModule):
+    >>>     def __init__(self):
+    >>>         super().__init__()
+    >>>         self.cmt_depot = compartment(init_value=0, default_dose=True, default_obs=False)
+    >>>         self.cmt_central = compartment(init_value=0, default_dose=False, default_obs=True)
+    >>>         self.cmt_effect = compartment(init_value=0, default_dose=False, default_obs=False)
+    >>>         ...
+    """
+    name = f"__unnamed_cmt_{uuid4().hex}"
+
+    return Compartment(
+        name=name,
+        alag=alag,
+        fraction=fraction,
+        init_value=init_value,
+        default_dose=default_dose,
+        default_obs=default_obs,
+    )
