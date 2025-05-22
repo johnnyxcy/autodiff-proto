@@ -6,7 +6,8 @@ from sympy import exp
 
 from symbols._symvar import SymVar
 from syntax.rethrow import MTranError
-from syntax.transformers.autodiff.transformer import AutoDiffTransformer
+from syntax.transformers.autodiff import AutoDiffTransformer
+from syntax.unparse import unparse
 
 
 def _transform(src: str, transformer: AutoDiffTransformer):
@@ -100,20 +101,27 @@ def test_if_else():
     class IfElse:
         def __init__(self):
             self.tv_v = SymVar("tv_v")
-            self.iiv_cl = SymVar("iiv_cl")
             self.iiv_v = SymVar("iiv_v")
 
         def pred(self):
             if self.tv_v > 0:
                 v = self.tv_v * exp(self.iiv_v)
-                cl = 0.134 * exp(self.iiv_cl)
             else:
                 v = self.tv_v + self.iiv_v
-                cl = 0.134 + self.iiv_cl
 
-            k = cl / v
-            return k
+            return v
 
+    expected = """
+def pred(self):
+    if self.tv_v > 0:
+        v = self.tv_v * exp(self.iiv_v)
+        __X__[v, self.iiv_v] = tv_v * exp(iiv_v)  # v wrt iiv_v
+    else:
+        v = self.tv_v + self.iiv_v
+        __X__[v, self.iiv_v] = 1  # v wrt iiv_v
+
+    return v
+"""
     src = inspect.getsource(IfElse.pred).strip()
     instance = IfElse()
     transformer = AutoDiffTransformer(
@@ -124,9 +132,105 @@ def test_if_else():
         globals={
             "exp": exp,
         },
-        symbols=[instance.tv_v, instance.iiv_cl, instance.iiv_v],
-        wrt=[instance.iiv_v, instance.iiv_cl],
+        symbols=[instance.tv_v, instance.iiv_v],
+        wrt=[instance.iiv_v],
     )
 
     transformed = _transform(src, transformer)
-    print(transformed.code)
+    assert unparse(transformed) == expected.strip()
+
+
+def test_override():
+    class Override:
+        def __init__(self):
+            self.tv_v = SymVar("tv_v")
+            self.iiv_v = SymVar("iiv_v")
+
+        def pred(self):
+            v = self.tv_v * exp(self.iiv_v)
+            if self.tv_v > 0:
+                v = self.tv_v + self.iiv_v
+
+            return v
+
+    expected = """
+def pred(self):
+    v = self.tv_v * exp(self.iiv_v)
+    __X__[v, self.iiv_v] = tv_v * exp(iiv_v)  # v wrt iiv_v
+    if self.tv_v > 0:
+        v = self.tv_v + self.iiv_v
+        __X__[v, self.iiv_v] = 1  # v wrt iiv_v
+
+    return v
+"""
+
+    src = inspect.getsource(Override.pred).strip()
+    instance = Override()
+    transformer = AutoDiffTransformer(
+        source_code=src,
+        locals={
+            "self": instance,
+        },
+        globals={
+            "exp": exp,
+        },
+        symbols=[instance.tv_v, instance.iiv_v],
+        wrt=[
+            instance.iiv_v,
+        ],
+    )
+
+    transformed = _transform(src, transformer)
+    assert unparse(transformed) == expected.strip()
+
+
+def test_carryover():
+    class Carryover:
+        def __init__(self):
+            self.tv_v = SymVar("tv_v")
+            self.iiv_v = SymVar("iiv_v")
+
+        def pred(self):
+            v = self.tv_v * exp(self.iiv_v)
+            if v > 0:
+                v = self.tv_v + self.iiv_v
+            z = v
+            if v < 0:
+                z = -v
+
+            return z
+
+    expected = """
+def pred(self):
+    v = self.tv_v * exp(self.iiv_v)
+    __X__[v, self.iiv_v] = tv_v * exp(iiv_v)  # v wrt iiv_v
+    if v > 0:
+        v = self.tv_v + self.iiv_v
+        __X__[v, self.iiv_v] = 1  # v wrt iiv_v
+    z = v
+    __X__[z, self.iiv_v] = __X__[v, self.iiv_v]  # z wrt iiv_v
+    if v < 0:
+        z = -v
+        __X__[z, self.iiv_v] = -__X__[v, self.iiv_v]  # z wrt iiv_v
+
+    return z
+"""
+
+    src = inspect.getsource(Carryover.pred).strip()
+    instance = Carryover()
+    transformer = AutoDiffTransformer(
+        source_code=src,
+        locals={
+            "self": instance,
+        },
+        globals={
+            "exp": exp,
+        },
+        symbols=[instance.tv_v, instance.iiv_v],
+        wrt=[
+            instance.iiv_v,
+        ],
+    )
+
+    transformed = _transform(src, transformer)
+    assert unparse(transformed) == expected.strip()

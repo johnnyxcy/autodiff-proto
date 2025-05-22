@@ -98,15 +98,16 @@ def indicate_position(source_code: str, range: CodeRange) -> str:
             + "\n"
         )
 
-    else:  # multi-line, use '|' to indicate position
-        s += " " * (start.column - 1)
-        s += "^" * (len(code_lines[start.line - 1]) - start.column + 1)
-        s += "\n"
-        for i in builtins.range(start.line, end.line - 1):
-            s += " " * (len(code_lines[i]) - 1)
-            s += "|\n"
-        s += " " * (len(code_lines[end.line - 1]) - 1)
-        s += "^" * (end.column - 1)
+    else:  # multi-line, use '---' to indicate rows only
+        # print three lines of code before
+        s += "\n".join(code_lines[max(0, start.line - 4) : start.line - 1]) + "\n"
+        # print the lines in between
+        for i in builtins.range(start.line - 1, end.line):
+            s += code_lines[i] + "\n"
+            s += " " * (start.column - 1)
+            s += "^" * (min(end.column, len(code_lines[i])) - start.column + 1) + "\n"
+        # print three lines of code after
+        s += "\n".join(code_lines[end.line : min(len(code_lines), end.line + 4)]) + "\n"
     return s
 
 

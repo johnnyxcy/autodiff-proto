@@ -196,7 +196,7 @@ class CmtSolvedA(Symbol, Cstifiable):
         """Compartment: Corresponding compartment."""
         return self._cmt
 
-    def as_cst(self) -> cst.BaseAssignTargetExpression:
+    def as_cst(self) -> cst.BaseExpression:
         """
         Convert the CmtSolvedA object to a CST expression.
         """
@@ -243,7 +243,7 @@ class CmtSolvedAWrt(Symbol, Cstifiable):
     def wrt2nd(self) -> SymVar | None:
         return self._wrt2nd
 
-    def as_cst(self) -> cst.BaseAssignTargetExpression:
+    def as_cst(self) -> cst.BaseExpression:
         """
         Convert the CmtSolvedAWrt object to a CST expression.
         """
@@ -350,7 +350,7 @@ class CmtDADt(Symbol, Cstifiable):
         """Expression: Expression of dAdt."""
         return self._expr
 
-    def as_cst(self) -> cst.BaseAssignTargetExpression:
+    def as_cst(self) -> cst.BaseExpression:
         """
         Convert the CmtDADt object to a CST expression.
         """
@@ -409,7 +409,7 @@ class CmtDADtWrt(Symbol, Cstifiable):
     def wrt2nd(self) -> SymVar | None:
         return self._wrt2nd
 
-    def as_cst(self) -> cst.BaseAssignTargetExpression:
+    def as_cst(self) -> cst.BaseExpression:
         """
         Convert the CmtDADtWrt object to a CST expression.
         """
@@ -493,7 +493,7 @@ class CmtParamArg(ParamArg):
     def cmt(self) -> Compartment:
         return self._cmt
 
-    def as_cst(self) -> cst.BaseAssignTargetExpression:
+    def as_cst(self) -> cst.BaseExpression:
         return cst.Subscript(
             value=cst.Name(ParamsArgRack.name),
             slice=self._as_cst_slices(),
@@ -515,7 +515,7 @@ class CmtParamArgWrt(ParamArgWrt):
     def cmt(self) -> Compartment:
         return self._cmt
 
-    def as_cst(self) -> cst.BaseAssignTargetExpression:
+    def as_cst(self) -> cst.BaseExpression:
         return cst.Subscript(
             value=cst.Name(ParamsArgRack.name),
             slice=self._as_cst_slices(),

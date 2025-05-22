@@ -10,6 +10,7 @@ from libcst.metadata import (
     ParentNodeProvider,
     ScopeProvider,
 )
+from sympy.core.function import FunctionClass
 
 from syntax.eval import eval_token
 
@@ -74,9 +75,11 @@ class LocalVariableMangler(cst.CSTTransformer):
 class InlineFunctionReplacement:
     """
     A class to represent the replacement of a function call with its body.
+
+    If the function has a return value, it will be stored in the `return_` attribute with mangled return variable name.
     """
 
-    return_: cst.Name | None
+    to: cst.Call | cst.Name | None
     body: Sequence[cst.BaseStatement]
 
 
@@ -95,7 +98,6 @@ class InlineFunctionTranspiler(cst.CSTTransformer):
         source_code (str): The source code being transformed.
         locals (dict[str, Any]): Local variables available for function resolution.
         globals (dict[str, Any]): Global variables available for function resolution.
-        inline_return (bool, optional): Whether to inline return values as assignments. Defaults to False.
 
     Methods:
         _transpile_inline_call(node: cst.Call) -> InlineFunctionReplacement | None:
@@ -115,15 +117,20 @@ class InlineFunctionTranspiler(cst.CSTTransformer):
         source_code: str,
         locals: dict[str, Any],
         globals: dict[str, Any],
-        inline_return: bool = False,
     ):
         super().__init__()
         self._source_code = source_code
         self._locals = locals
         self._globals = globals
-        self._inline_return = inline_return
 
-        self._inline_replace_map: dict[cst.CSTNode, InlineFunctionReplacement] = {}
+        self._inline_replace_map: dict[
+            tuple[cst.Call, cst.BaseStatement],  # Call node and its parent statement
+            InlineFunctionReplacement,  # Replacement for the function call
+        ] = {}
+
+        self._func_call_count: dict[
+            str, int
+        ] = {}  # Track the number of function calls, and use it in mangler to avoid name clashes
 
     def _transpile_inline_call(
         self, node: cst.Call
@@ -145,18 +152,37 @@ class InlineFunctionTranspiler(cst.CSTTransformer):
             self._globals,
             source_code=self._source_code,
         )
+
+        if isinstance(func_, FunctionClass):
+            # If the function is a SymPy FunctionClass, we can use its name directly
+            func_name = func_.__name__
+            return InlineFunctionReplacement(
+                to=node.with_changes(func=cst.Name(value=func_name)),
+                body=[],
+            )
+
         try:
             func_src = inspect.getsource(func_)
         except OSError:
             # Bypass if we cannot get the source code
             return None
-
-        func_def = cst.ensure_type(cst.parse_statement(func_src), cst.FunctionDef)
+        module = inspect.getmodule(func_)
+        _locals = self._locals.copy()
+        if module:
+            for k, v in inspect.getmembers(module):
+                if k.startswith("__") and k.endswith("__"):
+                    # Skip dunder methods
+                    continue
+                _locals[k] = v
+        func_def = cst.parse_statement(func_src)
+        if not isinstance(func_def, cst.FunctionDef):
+            # If the node is not a function definition, return None
+            return None
 
         # If there are nested function calls in function body, inline them first
         nested_transpiler = InlineFunctionTranspiler(
             source_code=func_src,
-            locals=self._locals,
+            locals=_locals,
             globals=self._globals,
         )
         transpiled = MetadataWrapper(cst.Module(body=[func_def])).visit(
@@ -167,10 +193,14 @@ class InlineFunctionTranspiler(cst.CSTTransformer):
             cst.FunctionDef,
         )
         func_name = func_def.name.value
+        count = self._func_call_count.get(func_name, 0)
 
         def rename_(name: str) -> str:
             # Rename the function arguments to avoid name clashes
-            return f"__{func_name}__{name}"
+            s = f"__{func_name}__{name}"
+            if count > 0:
+                s += f"__{count}"
+            return s
 
         Mangler = LocalVariableMangler(Mangler=rename_)
         wrapped = MetadataWrapper(cst.Module(body=[func_def]))
@@ -179,6 +209,7 @@ class InlineFunctionTranspiler(cst.CSTTransformer):
             cst.ensure_type(renamed, cst.Module).body[0],
             cst.FunctionDef,
         )
+        self._func_call_count[func_name] = count + 1
 
         # Collect the arguments passed to the function call
         # and create a mapping of argument names to their values
@@ -204,8 +235,8 @@ class InlineFunctionTranspiler(cst.CSTTransformer):
             if param.default and param.name.value not in named_arguments:
                 named_arguments[param.name.value] = param.default
 
-        replacement = InlineFunctionReplacement(return_=None, body=[])
         stmts: list[cst.BaseStatement] = []
+        replacement = InlineFunctionReplacement(to=None, body=[])
 
         # Put renamed arguments into the function body
         for name, value in named_arguments.items():
@@ -230,23 +261,20 @@ class InlineFunctionTranspiler(cst.CSTTransformer):
             ):
                 # Replace the return statement with the inlined value
                 if stmt.body[0].value is not None:
-                    if self._inline_return:
-                        ret_name = cst.Name(value=rename_("return"))
-                        replacement.return_ = ret_name
-                        stmts.append(
-                            stmt.with_changes(
-                                body=[
-                                    cst.Assign(
-                                        targets=[
-                                            cst.AssignTarget(ret_name),
-                                        ],
-                                        value=stmt.body[0].value,
-                                    )
-                                ]
-                            )
+                    ret_name = cst.Name(value=rename_("return"))
+                    replacement.to = ret_name
+                    stmts.append(
+                        stmt.with_changes(
+                            body=[
+                                cst.Assign(
+                                    targets=[
+                                        cst.AssignTarget(ret_name),
+                                    ],
+                                    value=stmt.body[0].value,
+                                )
+                            ]
                         )
-                    else:  # normal return
-                        stmts.append(stmt)
+                    )
             else:
                 # Add the body statement to the list
                 stmts.append(stmt)
@@ -258,30 +286,20 @@ class InlineFunctionTranspiler(cst.CSTTransformer):
     ):
         body: list[cst.BaseStatement] = []
         func_body = cst.ensure_type(original_node.body, cst.IndentedBlock)
-        for stmt in func_body.body:
-            if self._inline_replace_map.get(stmt) is not None:
-                # Replace the function call with the inlined nodes
-                inlined_nodes = self._inline_replace_map[stmt]
-                body.extend(inlined_nodes.body)
-
-                # If the inlined nodes contain a return statement, and the return value is received by a variable
-                if (
-                    inlined_nodes.return_ is not None
-                    and isinstance(stmt, cst.SimpleStatementLine)
-                    and len(stmt.body) == 1
-                    and isinstance(stmt.body[0], (cst.Assign, cst.AugAssign))
-                ):
-                    body.append(
-                        stmt.with_changes(
-                            body=[
-                                stmt.body[0].with_changes(value=inlined_nodes.return_)
-                            ]
-                        )
-                    )
-
-            else:
-                # Keep the original statement if it's not a function call
-                body.append(stmt)
+        if len(func_body.body) != len(updated_node.body.body):
+            # Function body should not be modified yet.
+            # Only Function call replacement should be done.
+            # If the function body is modified, we cannot inline the function call
+            # and we need to return the updated node.
+            return updated_node
+        for idx, stmt in enumerate(func_body.body):
+            for (_, stmt_to_replace), replacement in self._inline_replace_map.items():
+                if stmt_to_replace == stmt:
+                    # Replace the statement with the inlined nodes
+                    body.extend(replacement.body)
+                    # We CANNOT break here
+                    # because there may be multiple inlined nodes with in the statement
+            body.append(cst.ensure_type(updated_node.body.body[idx], cst.BaseStatement))
         return updated_node.with_changes(body=func_body.with_changes(body=body))
 
     def visit_Call(self, node: cst.Call):
@@ -298,4 +316,19 @@ class InlineFunctionTranspiler(cst.CSTTransformer):
         inlined_nodes = self._transpile_inline_call(node)
         if inlined_nodes is not None:
             # Store the mapping of the original call node to the inlined nodes
-            self._inline_replace_map[parent] = inlined_nodes
+            self._inline_replace_map[(node, parent)] = inlined_nodes
+
+    def leave_Call(self, original_node: cst.Call, updated_node: cst.Call):
+        # Replace the original Function call if needed
+        for (call_node, _), replacement in self._inline_replace_map.items():
+            # If the function call is inlined and `to` is specified
+            # which means we need to replace the call with the inlined nodes
+            if call_node == original_node and replacement.to is not None:
+                if isinstance(replacement.to, cst.Call):
+                    # replace the call with the replaced Call node
+                    return replacement.to
+                else:
+                    # replace the call with the named return value
+                    return cst.Name(value=replacement.to.value)
+        # Otherwise, return the updated node
+        return updated_node

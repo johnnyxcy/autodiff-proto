@@ -3,9 +3,11 @@ from __future__ import annotations
 from typing import Any, cast
 from uuid import uuid4
 
+import libcst as cst
 import numpy as np
 
 from symbols._symvar import SymVar
+from symbols.to_cst import Cstifiable
 from typings import BoundsType, ValueType
 
 __all__ = ["theta", "Theta"]
@@ -43,6 +45,19 @@ class Theta(SymVar):
         instance._fixed = fixed
         return instance
 
+    def __deepcopy__(self, memo: dict[int, Any]) -> Theta:
+        d = id(self)
+        ins = memo.get(d, None)
+        if ins is None:
+            ins = Theta(
+                name=self.name,
+                init_value=self._init_value,
+                bounds=self._bounds,
+                fixed=self.fixed,
+            )
+        ins.name = self.name
+        return ins
+
     @property
     def init_value(self) -> float:
         """float: Initial value for variable"""
@@ -61,19 +76,6 @@ class Theta(SymVar):
     def bounds(self) -> tuple[float | None, float | None]:
         """tuple[float | None, float | None]: Boundary of the theta parameter."""
         return self._bounds
-
-    def __deepcopy__(self, memo: dict[int, Any]) -> Theta:
-        d = id(self)
-        ins = memo.get(d, None)
-        if ins is None:
-            ins = Theta(
-                name=self.name,
-                init_value=self._init_value,
-                bounds=self._bounds,
-                fixed=self.fixed,
-            )
-        ins.name = self.name
-        return ins
 
     @bounds.setter
     def bounds(self, bounds: BoundsType | None) -> None:

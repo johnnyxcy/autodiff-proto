@@ -21,7 +21,7 @@ class ParamArg(Cstifiable):
             cst.SubscriptElement(cst.Index(cst.SimpleString(value=self.param_name))),
         ]
 
-    def as_cst(self) -> cst.BaseAssignTargetExpression:
+    def as_cst(self) -> cst.BaseExpression:
         return cst.Subscript(
             value=cst.Name(ParamsArgRack.name),
             slice=self._as_cst_slices(),
@@ -88,7 +88,7 @@ class ParamArgWrt(Cstifiable):
             )
         return slice_elements
 
-    def as_cst(self) -> cst.BaseAssignTargetExpression:
+    def as_cst(self) -> cst.BaseExpression:
         return cst.Subscript(
             value=cst.Name(ParamsArgRack.name),
             slice=self._as_cst_slices(),

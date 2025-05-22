@@ -1,6 +1,11 @@
+from __future__ import annotations
+
 import re
+import typing
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, Generic
+
+import libcst as cst
 
 from module.defs.module import Module
 from module.defs.ode import OdeModule
@@ -10,14 +15,37 @@ from symbols._omega_eta import Eta
 from symbols._sharedvar import SharedVar
 from symbols._sigma_eps import Eps
 from symbols._theta import Theta
+from syntax.transformers.autodiff import AutoDiffTransformer
+from syntax.transformers.inline_func_transpile import InlineFunctionTranspiler
+from syntax.unparse import unparse
 from utils.find_global import find_global_context
 from utils.inspect_hack import inspect
 from utils.loggings import logger
 
+T = typing.TypeVar("T", bound=cst.BaseCompoundStatement)
 
-# Best practice: return a dataclass to hold all interpreted results
+
 @dataclass
-class InterpretResult:
+class CSTAndSrc(Generic[T]):
+    src: str
+    cst: T
+
+    def apply_transform(
+        self,
+        transformer: cst.CSTTransformer,
+    ) -> CSTAndSrc[T]:
+        transformed = cst.MetadataWrapper(cst.Module(body=[self.cst])).visit(
+            transformer
+        )
+        src = unparse(transformed)
+        return CSTAndSrc(
+            src=src,
+            cst=cst.ensure_type(transformed.body[0], type(self.cst)),
+        )
+
+
+@dataclass(kw_only=True)
+class ModuleInterpretation:
     _o: Module
 
     thetas: list[Theta]
@@ -27,6 +55,7 @@ class InterpretResult:
     colvar_collections: list[ColVarCollection[AnyColVar]]
     cmts: list[Compartment]
     sharedvars: list[SharedVar]
+    n_cmt: int
     advan: int
     trans: int
     defdose_cmt: int
@@ -35,12 +64,48 @@ class InterpretResult:
     globals: dict[str, Any] = field(default_factory=dict)
 
 
-def interpret(mod: Module, src: str | None = None):
+def distill(mod: Module, src: str | None = None) -> ModuleInterpretation:
+    logger.debug(
+        "[MTran::interpret] Start interpreting module: %s", mod.__class__.__name__
+    )
+
     if src is None:
         src = inspect.getsource(mod.__class__)
     else:
         src = src
+    logger.debug("[MTran::interpret] Raw source code:\n %s", src.strip())
 
+    parsed_code_module = cst.parse_module(src.strip())
+    if len(parsed_code_module.body) != 1:
+        raise ValueError(
+            "The module source code should contain and only contain class definition, "
+            "no other code should be included."
+        )
+    module_cls_def = CSTAndSrc(
+        src=src, cst=cst.ensure_type(parsed_code_module.body[0], cst.ClassDef)
+    )
+
+    pred_func_def: CSTAndSrc[cst.FunctionDef] | None = None
+    try:
+        # 用 inspect 获取函数体
+        pred_func_src = inspect.getsource(mod.pred)
+        pred_func_def = CSTAndSrc(
+            src=pred_func_src,
+            cst=cst.ensure_type(
+                cst.parse_module(pred_func_src).body[0], cst.FunctionDef
+            ),
+        )
+    except Exception as _:
+        # 如果没有找到, 那么就从 module_cls_def 中获取
+        for stmt in module_cls_def.cst.body.body:
+            if isinstance(stmt, cst.FunctionDef) and stmt.name.value == "pred":
+                pred_func_def = CSTAndSrc(src=unparse(stmt).strip(), cst=stmt)
+                break
+    if pred_func_def is None:
+        raise ValueError(
+            "Failed to locate the `pred` function in the module. "
+            "Please ensure that the `pred` function is defined in the module."
+        )
     visited: set[str] = set()
     # 重要: 这里必须先用 vars(mod) 获取所有的实例属性, 否则会导致排序错误, dir(mod) 是无序的
     attr_names = [*vars(mod).keys(), *dir(mod)]
@@ -81,6 +146,7 @@ def interpret(mod: Module, src: str | None = None):
         #     func_context[attr_name] = attr
 
         visited.add(attr_name)
+    logger.debug("[MTran::interpret] Attributes found: %s", visited)
 
     # 检查 column_context 和 column_collection_context 的 col_name 是否有重复
     visited_colnames: set[str] = set()
@@ -95,7 +161,7 @@ def interpret(mod: Module, src: str | None = None):
                 raise ValueError(f"Duplicate `column` definition for '{col.col_name}'")
             visited_colnames.add(col.col_name)
 
-    globals = find_global_context(mod=mod)
+    globals = find_global_context(o=mod)
 
     if issubclass(mod.__class__, OdeModule):
         n_cmt = len(cmts)
@@ -158,6 +224,7 @@ def interpret(mod: Module, src: str | None = None):
         trans = 0
         defdose_cmt = 0
         defobs_cmt = 0
+        n_cmt = 0
 
     locals = {
         "self": mod,
@@ -165,7 +232,35 @@ def interpret(mod: Module, src: str | None = None):
         "__class__": mod.__class__,
     }
 
-    return InterpretResult(
+    # Transform 1: 自定义函数展开
+    logger.debug("[MTran::distill] Start inline function transpile")
+    transpiler = InlineFunctionTranspiler(
+        source_code=src,
+        locals=locals,
+        globals=globals,
+    )
+    pred_func_def = pred_func_def.apply_transform(transpiler)
+
+    logger.debug(
+        "[MTran::distill] Inline function transpile result: %s",
+        pred_func_def.src,
+    )
+
+    # Transform 2: Automatic Gradient
+    autodiff_transformer = AutoDiffTransformer(
+        source_code=pred_func_def.src,
+        locals=locals,
+        globals=globals,
+        symbols=[*thetas, *etas, *epsilons],
+        wrt=[*etas],
+    )
+    pred_func_def = pred_func_def.apply_transform(autodiff_transformer)
+    logger.debug(
+        "[MTran::distill] Automatic gradient transpile result: %s",
+        pred_func_def.src,
+    )
+
+    return ModuleInterpretation(
         _o=mod,
         thetas=thetas,
         etas=etas,
@@ -175,6 +270,7 @@ def interpret(mod: Module, src: str | None = None):
         cmts=cmts,
         sharedvars=sharedvars,
         globals=globals,
+        n_cmt=n_cmt,
         advan=advan,
         trans=trans,
         defdose_cmt=defdose_cmt,

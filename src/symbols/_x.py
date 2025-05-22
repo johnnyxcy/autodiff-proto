@@ -30,7 +30,7 @@ class XWrt(Symbol, Cstifiable):
     def wrt2nd(self) -> SymVar | None:
         return self._wrt2nd
 
-    def as_cst(self) -> cst.BaseAssignTargetExpression:
+    def as_cst(self) -> cst.BaseExpression:
         """
         Convert the XWrt object to a CST expression.
         """

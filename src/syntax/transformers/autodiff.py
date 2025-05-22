@@ -246,7 +246,10 @@ class AutoDiffTransformer(cst.CSTTransformer):
                             assign_ = cst.Assign(
                                 targets=[
                                     cst.AssignTarget(
-                                        target=XWrt(target.value, symvar).as_cst()
+                                        target=cst.ensure_type(
+                                            XWrt(target.value, symvar).as_cst(),
+                                            cst.BaseAssignTargetExpression,
+                                        )
                                     )
                                 ],
                                 value=parse_sympy_expr(expr=expr),

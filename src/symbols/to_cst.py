@@ -23,7 +23,7 @@ from sympy.core.relational import Relational
 
 @runtime_checkable
 class Cstifiable(Protocol):
-    def as_cst(self) -> cst.BaseAssignTargetExpression:
+    def as_cst(self) -> cst.BaseExpression:
         """
         Convert the XWrt object to a CST expression.
         """

@@ -32,8 +32,8 @@ def is_ipynb() -> bool:
         return False  # Normal Python
 
 
-def find_global_context(mod: object) -> dict[str, typing.Any]:
-    _global_context: dict[str, typing.Any] | None = getattr(mod, "_m__globals__", None)
+def find_global_context(o: object) -> dict[str, typing.Any]:
+    _global_context: dict[str, typing.Any] | None = getattr(o, "_m__globals__", None)
 
     if _global_context:
         return _global_context
@@ -51,7 +51,7 @@ def find_global_context(mod: object) -> dict[str, typing.Any]:
                     _global_context = {**ipython_ctx}
                     break
     else:
-        cls_source_file = inspect.getsourcefile(mod.__class__)
+        cls_source_file = inspect.getsourcefile(o.__class__)
         if not cls_source_file:
             raise ValueError("Failed to locate source file for `Module` definition")
         for frame in call_stacks:
