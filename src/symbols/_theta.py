@@ -32,7 +32,7 @@ class Theta(SymVar):
     def __new__(
         cls,
         name: str,
-        init_value: ValueType,
+        init_value: ValueType = 0.0,
         bounds: BoundsType | None = None,
         fixed: bool = False,
         **kwargs: Any,
