@@ -7,7 +7,7 @@ import libcst as cst
 from sympy import Expr, Number, Symbol
 
 from symbols._args import ParamArg, ParamArgWrt, ParamsArgRack
-from typings import Cstifiable, Expression, ValueType
+from typings import AsCST, Expression, ValueType
 
 
 class IntegralT(Symbol):
@@ -172,7 +172,7 @@ class CmtInitialA(Symbol):
         return self._expr
 
 
-class CmtSolvedA(Symbol, Cstifiable):
+class CmtSolvedA(Symbol, AsCST):
     """Class of solved compartment amounts.
 
     Attributes
@@ -214,7 +214,7 @@ class CmtSolvedA(Symbol, Cstifiable):
         )
 
 
-class CmtSolvedAWrt(Symbol, Cstifiable):
+class CmtSolvedAWrt(Symbol, AsCST):
     __slots__ = ("_cmt", "_wrt", "_wrt2nd")
 
     def __new__(
@@ -319,7 +319,7 @@ class CmtSolvedARack:
             return key.A
 
 
-class CmtDADt(Symbol, Cstifiable):
+class CmtDADt(Symbol, AsCST):
     """Class of compartment dAdt.
 
     Attributes
@@ -369,7 +369,7 @@ class CmtDADt(Symbol, Cstifiable):
         )
 
 
-class CmtDADtWrt(Symbol, Cstifiable):
+class CmtDADtWrt(Symbol, AsCST):
     __slots__ = ("_cmt", "_wrt", "_wrt2nd")
 
     def __new__(

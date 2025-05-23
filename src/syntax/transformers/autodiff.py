@@ -26,7 +26,7 @@ from sympy.parsing.sympy_parser import (
 )
 
 from symbols._x import XWrt
-from symbols.to_cst import parse_sympy_expr
+from symbols.sympy_parser import parse_sympy_expr
 from syntax.metadata.scope_provider import (
     Scope,
     ScopeProvider,

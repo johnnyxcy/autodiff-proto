@@ -4,7 +4,7 @@ import typing
 
 from sympy import Symbol
 
-from typings import Cstifiable
+from typings import AsCST
 
 
 class SharedVar(Symbol):
@@ -92,7 +92,7 @@ class SharedVarValueWrt(Symbol):
         return self._wrt2nd
 
 
-class SharedVarValueRack(Cstifiable):
+class SharedVarValueRack(AsCST):
     """
     Representing a dummy getter for SharedVar symbol and the corresponding derivatives to be used in MTran.
     """

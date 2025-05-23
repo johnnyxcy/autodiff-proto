@@ -3,10 +3,10 @@ from __future__ import annotations
 import libcst as cst
 from sympy import Expr, Symbol
 
-from typings import Cstifiable
+from typings import AsCST
 
 
-class XWrt(Symbol, Cstifiable):
+class XWrt(Symbol, AsCST):
     """
     A class to represent an arbitrary variable X with respect to a symvar wrt.
 

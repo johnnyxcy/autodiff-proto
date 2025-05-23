@@ -4,12 +4,13 @@ import typing
 from copy import deepcopy
 from uuid import uuid4
 
+import libcst as cst
 import numpy as np
 import numpy.typing as npt
 from sympy import Symbol
 
 from symbols._block import Block, SymbolBlock
-from typings import ValueType
+from typings import AsCST, ValueType
 
 __all__ = ["omega", "omega_sd", "omega_iov", "omega_iov_sd", "Omega", "OmegaIOV", "Eta"]
 
@@ -51,7 +52,7 @@ class Eta(Symbol):
         raise ValueError("Never deepcopy Eta. Deepcopy Omega instead")
 
 
-class Omega(SymbolBlock[Eta]):
+class Omega(SymbolBlock[Eta], AsCST):
     """Interindividual variability matrix.
 
 
@@ -73,6 +74,37 @@ class Omega(SymbolBlock[Eta]):
             el.omega = self_
 
         return self_
+
+    def as_cst(self):
+        values = self.values
+
+        lhs_targets = [cst.AssignTarget(cst.Name(value=name)) for name in self.names]
+
+        args = []
+        if len(self.names) > 1:  # more than one element on lhs
+            mat_els: list[cst.Element] = []
+            for row in values:
+                mat_els.append(
+                    cst.Element(
+                        cst.List([cst.Element(cst.Float(value=str(v))) for v in row])
+                    )
+                )
+            args.append(cst.Arg(cst.List(mat_els)))
+        else:
+            args.append(cst.Arg(cst.Float(value=str(values[0][0]))))
+        if self.fixed:
+            args.append(
+                cst.Arg(
+                    keyword=cst.Name(value="fixed"),
+                    value=cst.Name(value=str(self.fixed)),
+                )
+            )
+        rhs = cst.Call(func=cst.Name(value=omega.__name__), args=args)
+
+        return cst.Assign(
+            targets=lhs_targets,
+            value=rhs,
+        )
 
 
 class OmegaIOV(Omega):

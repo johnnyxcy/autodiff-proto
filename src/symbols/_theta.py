@@ -3,15 +3,16 @@ from __future__ import annotations
 from typing import Any, cast
 from uuid import uuid4
 
+import libcst as cst
 import numpy as np
 from sympy import Symbol
 
-from typings import BoundsType, ValueType
+from typings import AsCST, BoundsType, ValueType
 
 __all__ = ["theta", "Theta"]
 
 
-class Theta(Symbol):
+class Theta(Symbol, AsCST):
     """
     Theta parameter, which is the fixed effect in nonlinear mixed effects model.
 
@@ -42,6 +43,47 @@ class Theta(Symbol):
         instance.init_value = init_value
         instance._fixed = fixed
         return instance
+
+    def as_cst(self):
+        args = [
+            cst.Arg(value=cst.Float(value=str(self.init_value))),
+        ]
+        if self.bounds[0] or self.bounds[1]:
+            if self.bounds[0] is None:
+                lower_ = cst.Name(value="None")
+            else:
+                lower_ = cst.Float(value=str(self.bounds[0]))
+
+            if self.bounds[1] is None:
+                upper_ = cst.Name(value="None")
+            else:
+                upper_ = cst.Float(value=str(self.bounds[1]))
+
+            args.append(
+                cst.Arg(
+                    keyword=cst.Name(value="bounds"),
+                    value=cst.Tuple(
+                        [
+                            cst.Element(lower_),
+                            cst.Element(upper_),
+                        ]
+                    ),
+                )
+            )
+        if self.fixed:
+            args.append(
+                cst.Arg(
+                    keyword=cst.Name(value="fixed"),
+                    value=cst.Name(value=str(self.fixed)),
+                )
+            )
+        return cst.Assign(
+            targets=[cst.AssignTarget(cst.Name(value=self.name))],
+            value=cst.Call(
+                func=cst.Name(value=theta.__name__),
+                args=args,
+            ),
+        )
 
     def __deepcopy__(self, memo: dict[int, Any]) -> Theta:
         d = id(self)

@@ -5,10 +5,10 @@ import typing
 import libcst as cst
 from sympy import Symbol
 
-from typings import Cstifiable
+from typings import AsCST
 
 
-class ParamArg(Cstifiable):
+class ParamArg(AsCST):
     def __init__(self, param_name: str) -> None:
         self._param_name = param_name
 
@@ -48,7 +48,7 @@ class IndexedParamArg(ParamArg):
         ]
 
 
-class ParamArgWrt(Cstifiable):
+class ParamArgWrt(AsCST):
     def __init__(
         self,
         param_arg: str,

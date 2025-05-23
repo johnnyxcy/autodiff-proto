@@ -3,7 +3,10 @@ from __future__ import annotations
 import typing
 from _collections_abc import dict_items, dict_keys, dict_values
 
+import libcst as cst
 from sympy import Symbol
+
+from typings import AsCST
 
 ColumnDtypeLiteral = typing.Literal["numeric", "str"]
 ColumnDtypeTypeAlias = typing.Type[int | float | str]
@@ -14,7 +17,7 @@ def is_numeric_dtype(dtype: ColumnDtype) -> bool:
     return dtype == "numeric" or dtype in [int, float]
 
 
-class ColVar:
+class ColVar(AsCST):
     """Column variable."""
 
     name: str
@@ -47,6 +50,29 @@ class ColVar:
 
     def as_pretty_str(self) -> str:
         return f"{type(self).__qualname__}(name={self.name}, col_name={self.col_name}, dtype={self.dtype}, is_categorical={self.is_categorical})"
+
+    def as_cst(self):
+        args: list[cst.Arg] = [cst.Arg(cst.Name(value=self.col_name))]
+        if self.dtype != "numeric":
+            args.append(
+                cst.Arg(
+                    keyword=cst.Name(value="dtype"),
+                    value=cst.SimpleString(value="categorical"),
+                )
+            )
+
+        if self.is_categorical:
+            args.append(
+                cst.Arg(
+                    keyword=cst.Name(value="is_categorical"),
+                    value=cst.Name(value="True"),
+                )
+            )
+
+        return cst.Assign(
+            targets=[cst.AssignTarget(cst.Name(value=self.name))],
+            value=cst.Call(func=cst.Name(value=column.__name__), args=args),
+        )
 
 
 T = typing.TypeVar("T", covariant=True, bound=ColVar)

@@ -9,7 +9,7 @@ BoundsType = tuple[ValueType | None, ValueType | None]
 
 
 @runtime_checkable
-class Cstifiable(Protocol):
+class AsCST(Protocol):
     def as_cst(self) -> cst.CSTNode:
         """
         Object is convertible to a CST expression.
