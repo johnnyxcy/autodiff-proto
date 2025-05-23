@@ -3,6 +3,9 @@
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
 
+# Fork from https://libcst.readthedocs.io/en/latest/_modules/libcst/metadata/scope_provider.html
+# README: Our modifications made to support If/Else Scope
+
 
 import abc
 import builtins
