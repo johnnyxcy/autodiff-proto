@@ -3,7 +3,6 @@ from __future__ import annotations
 import libcst as cst
 from sympy import Expr, Symbol
 
-from symbols._symvar import SymVar
 from symbols.to_cst import Cstifiable
 
 
@@ -16,7 +15,7 @@ class XWrt(Symbol, Cstifiable):
 
     __slots__ = ("_xname", "_wrt", "_wrt2nd")
 
-    def __new__(cls, xname: str, wrt: SymVar, wrt2nd: SymVar | None = None) -> XWrt:
+    def __new__(cls, xname: str, wrt: Symbol, wrt2nd: Symbol | None = None) -> XWrt:
         if wrt2nd is not None:
             name = f"∂²{xname}/∂{wrt.name}∂{wrt2nd.name}"
         else:
@@ -32,11 +31,11 @@ class XWrt(Symbol, Cstifiable):
         return self._xname
 
     @property
-    def wrt(self) -> SymVar:
+    def wrt(self) -> Symbol:
         return self._wrt
 
     @property
-    def wrt2nd(self) -> SymVar | None:
+    def wrt2nd(self) -> Symbol | None:
         return self._wrt2nd
 
     def as_cst(self) -> cst.BaseExpression:
@@ -79,7 +78,7 @@ class XWrtRack:
 
     name = "__X__"
 
-    def __getitem__(self, x: Expr, wrt: SymVar, wrt2nd: SymVar | None = None) -> XWrt:
+    def __getitem__(self, x: Expr, wrt: Symbol, wrt2nd: Symbol | None = None) -> XWrt:
         """
         Get the x_wrt expression for the given variable and wrt.
         """

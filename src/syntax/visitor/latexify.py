@@ -6,7 +6,6 @@ from sympy.parsing.sympy_parser import auto_number, auto_symbol, repeated_decima
 
 from symbols._omega_eta import Eta
 from symbols._sigma_eps import Eps
-from symbols._symvar import SymVar
 from symbols._theta import Theta
 from syntax.unparse import unparse
 
@@ -18,19 +17,19 @@ class LateXifyVisitor(cst.CSTVisitor):
 
     def __init__(
         self,
-        symvars: list[SymVar],
+        symbols: list[Symbol],
         source_code: str,
         locals: dict[str, Any],
         globals: dict[str, Any],
     ):
-        self._symvars = symvars
+        self._symbols = symbols
         self.content: list[str] = []
         self._source_code = source_code
         self._locals = locals
         self._globals = globals
 
         self._symbol_names: dict[Symbol, str] = {}
-        for s in symvars:
+        for s in symbols:
             if isinstance(s, Theta):
                 self._symbol_names[s] = "\\theta_{" + s.name + "}"
             elif isinstance(s, Eta):

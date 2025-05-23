@@ -30,7 +30,7 @@ def test_simple():
     src = inspect.getsource(Simple.pred).strip()
     instance = Simple()
     visitor = LateXifyVisitor(
-        symvars=[instance.tv_v, instance.iiv_cl, instance.iiv_v],
+        symbols=[instance.tv_v, instance.iiv_cl, instance.iiv_v],
         source_code=src,
         locals={
             "self": instance,

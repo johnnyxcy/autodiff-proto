@@ -4,11 +4,10 @@ import typing
 
 from sympy import Symbol
 
-from symbols._symvar import SymVar
 from symbols.to_cst import Cstifiable
 
 
-class SharedVar(SymVar):
+class SharedVar(Symbol):
     """Wrapped Symbol"""
 
     __slots__ = ("_init_value", "_dtype")
@@ -69,7 +68,7 @@ class SharedVarValueWrt(Symbol):
     __slots__ = ("_variable", "_wrt", "_wrt2nd")
 
     def __new__(
-        cls, variable: SharedVar, wrt: SymVar, wrt2nd: SymVar | None = None
+        cls, variable: SharedVar, wrt: Symbol, wrt2nd: Symbol | None = None
     ) -> SharedVarValueWrt:
         name = f"d{variable.name}_d{wrt.name}"
         if wrt2nd:
@@ -85,11 +84,11 @@ class SharedVarValueWrt(Symbol):
         return self._variable
 
     @property
-    def wrt(self) -> SymVar:
+    def wrt(self) -> Symbol:
         return self._wrt
 
     @property
-    def wrt2nd(self) -> SymVar | None:
+    def wrt2nd(self) -> Symbol | None:
         return self._wrt2nd
 
 
@@ -107,10 +106,10 @@ class SharedVarValueRack(Cstifiable):
     def __getitem__(self, __key: SharedVar) -> SharedVarValue: ...
 
     @typing.overload
-    def __getitem__(self, __key: tuple[SharedVar, SymVar]) -> SharedVarValueWrt: ...
+    def __getitem__(self, __key: tuple[SharedVar, Symbol]) -> SharedVarValueWrt: ...
 
     def __getitem__(
-        self, __key: SharedVar | tuple[SharedVar, SymVar]
+        self, __key: SharedVar | tuple[SharedVar, Symbol]
     ) -> SharedVarValue | SharedVarValueWrt:
         if isinstance(__key, SharedVar):
             return SharedVarValue(__key)

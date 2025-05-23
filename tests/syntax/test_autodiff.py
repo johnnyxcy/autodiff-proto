@@ -2,9 +2,8 @@ import inspect
 
 import libcst as cst
 import pytest
-from sympy import exp
+from sympy import Symbol, exp
 
-from symbols._symvar import SymVar
 from syntax.rethrow import MTranError
 from syntax.transformers.autodiff import AutoDiffTransformer
 from syntax.unparse import unparse
@@ -36,8 +35,8 @@ def test_name_error():
 def test_simple_symbols():
     class SimpleSymbols:
         def __init__(self):
-            self.tv = SymVar("tv")
-            self.iiv = SymVar("iiv")
+            self.tv = Symbol("tv")
+            self.iiv = Symbol("iiv")
 
         def pred(self):
             x = self.tv * exp(self.iiv)
@@ -63,9 +62,9 @@ def test_simple_symbols():
 def test_chained_expr():
     class Chained:
         def __init__(self):
-            self.tv_v = SymVar("tv_v")
-            self.iiv_cl = SymVar("iiv_cl")
-            self.iiv_v = SymVar("iiv_v")
+            self.tv_v = Symbol("tv_v")
+            self.iiv_cl = Symbol("iiv_cl")
+            self.iiv_v = Symbol("iiv_v")
 
         def pred(self):
             tv_v = self.tv_v
@@ -100,8 +99,8 @@ def test_chained_expr():
 def test_if_else():
     class IfElse:
         def __init__(self):
-            self.tv_v = SymVar("tv_v")
-            self.iiv_v = SymVar("iiv_v")
+            self.tv_v = Symbol("tv_v")
+            self.iiv_v = Symbol("iiv_v")
 
         def pred(self):
             if self.tv_v > 0:
@@ -115,10 +114,10 @@ def test_if_else():
 def pred(self):
     if self.tv_v > 0:
         v = self.tv_v * exp(self.iiv_v)
-        __X__[v, self.iiv_v] = tv_v * exp(iiv_v)  # v wrt iiv_v
+        __X__[v, self.iiv_v] = tv_v * exp(iiv_v)  # mtran: v wrt iiv_v
     else:
         v = self.tv_v + self.iiv_v
-        __X__[v, self.iiv_v] = 1  # v wrt iiv_v
+        __X__[v, self.iiv_v] = 1  # mtran: v wrt iiv_v
 
     return v
 """
@@ -143,8 +142,8 @@ def pred(self):
 def test_override():
     class Override:
         def __init__(self):
-            self.tv_v = SymVar("tv_v")
-            self.iiv_v = SymVar("iiv_v")
+            self.tv_v = Symbol("tv_v")
+            self.iiv_v = Symbol("iiv_v")
 
         def pred(self):
             v = self.tv_v * exp(self.iiv_v)
@@ -156,10 +155,10 @@ def test_override():
     expected = """
 def pred(self):
     v = self.tv_v * exp(self.iiv_v)
-    __X__[v, self.iiv_v] = tv_v * exp(iiv_v)  # v wrt iiv_v
+    __X__[v, self.iiv_v] = tv_v * exp(iiv_v)  # mtran: v wrt iiv_v
     if self.tv_v > 0:
         v = self.tv_v + self.iiv_v
-        __X__[v, self.iiv_v] = 1  # v wrt iiv_v
+        __X__[v, self.iiv_v] = 1  # mtran: v wrt iiv_v
 
     return v
 """
@@ -187,8 +186,8 @@ def pred(self):
 def test_carryover():
     class Carryover:
         def __init__(self):
-            self.tv_v = SymVar("tv_v")
-            self.iiv_v = SymVar("iiv_v")
+            self.tv_v = Symbol("tv_v")
+            self.iiv_v = Symbol("iiv_v")
 
         def pred(self):
             v = self.tv_v * exp(self.iiv_v)
@@ -198,21 +197,18 @@ def test_carryover():
 
             return z
 
-    #     expected = """
-    # def pred(self):
-    #     v = self.tv_v * exp(self.iiv_v)
-    #     __X__[v, self.iiv_v] = tv_v * exp(iiv_v)  # v wrt iiv_v
-    #     if v > 0:
-    #         v = self.tv_v + self.iiv_v
-    #         __X__[v, self.iiv_v] = 1  # v wrt iiv_v
-    #     z = v
-    #     __X__[z, self.iiv_v] = __X__[v, self.iiv_v]  # z wrt iiv_v
-    #     if v < 0:
-    #         z = -v
-    #         __X__[z, self.iiv_v] = -__X__[v, self.iiv_v]  # z wrt iiv_v
+    expected = """
+def pred(self):
+    v = self.tv_v * exp(self.iiv_v)
+    __X__[v, self.iiv_v] = tv_v * exp(iiv_v)  # mtran: v wrt iiv_v
+    z = v
+    __X__[z, self.iiv_v] = __X__[v, self.iiv_v]  # mtran: z wrt iiv_v
+    if v < 0:
+        z = -v
+        __X__[z, self.iiv_v] = -1 * __X__[v, self.iiv_v]  # mtran: z wrt iiv_v
 
-    #     return z
-    # """
+    return z
+    """
 
     src = inspect.getsource(Carryover.pred).strip()
     instance = Carryover()
@@ -231,5 +227,4 @@ def test_carryover():
     )
 
     transformed = _transform(src, transformer)
-    print(unparse(transformed))
-    # assert unparse(transformed) == expected.strip()
+    assert unparse(transformed) == expected.strip()

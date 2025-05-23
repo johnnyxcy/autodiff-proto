@@ -9,45 +9,40 @@ from sympy import Add, Symbol
 
 from typings import ValueType
 
+__all__ = ["SymbolBlock", "Block"]
 
-class SymVar(Symbol):
-    """Symbolic variable class for symbolic computation."""
-
-    pass
+SymbolT = typing.TypeVar("SymbolT", bound=Symbol)
 
 
-T = typing.TypeVar("T", bound=SymVar)
-
-
-def interpret_add_in_slice(o: SymBlock[T], expr: Add) -> int:
+def interpret_add_in_slice(o: SymbolBlock[SymbolT], expr: Add) -> int:
     args = expr.args
     if len(args) != 2:
         raise ValueError("Invalid length of add")
 
     left, right = args
-    if isinstance(left, SymVar):
-        idx = int(o._els.index(typing.cast(T, left)) + right)
-    elif isinstance(right, SymVar):
-        idx = int(left + o._els.index(typing.cast(T, right)))
+    if isinstance(left, Symbol):
+        idx = int(o._els.index(typing.cast(SymbolT, left)) + right)
+    elif isinstance(right, Symbol):
+        idx = int(left + o._els.index(typing.cast(SymbolT, right)))
     else:
         raise ValueError("Invalid add components in slice")
 
     return idx
 
 
-def interpret_slice(o: SymBlock[T], s: slice) -> tuple[int, int]:
+def interpret_slice(o: SymbolBlock[SymbolT], s: slice) -> tuple[int, int]:
     if s.step:
         raise NotImplementedError(f"{o.__class__.__name__} cannot handle slice step")
-    if isinstance(s.start, SymVar) and isinstance(s.stop, SymVar):
-        idx1 = o._els.index(typing.cast(T, s.start))
-        idx2 = o._els.index(typing.cast(T, s.stop))
+    if isinstance(s.start, Symbol) and isinstance(s.stop, Symbol):
+        idx1 = o._els.index(typing.cast(SymbolT, s.start))
+        idx2 = o._els.index(typing.cast(SymbolT, s.stop))
         return idx1, idx2
-    elif isinstance(s.start, Add) and isinstance(s.stop, SymVar):
+    elif isinstance(s.start, Add) and isinstance(s.stop, Symbol):
         idx1 = interpret_add_in_slice(o=o, expr=s.start)
-        idx2 = o._els.index(typing.cast(T, s.stop))
+        idx2 = o._els.index(typing.cast(SymbolT, s.stop))
         return idx1, idx2
-    elif isinstance(s.start, SymVar) and isinstance(s.stop, Add):
-        idx1 = o._els.index(typing.cast(T, s.start))
+    elif isinstance(s.start, Symbol) and isinstance(s.stop, Add):
+        idx1 = o._els.index(typing.cast(SymbolT, s.start))
         idx2 = interpret_add_in_slice(o=o, expr=s.stop)
         return idx1, idx2
     elif isinstance(s.start, int) and isinstance(s.stop, int):
@@ -58,16 +53,16 @@ def interpret_slice(o: SymBlock[T], s: slice) -> tuple[int, int]:
         )
 
 
-class SymBlock(typing.Generic[T]):
+class SymbolBlock(typing.Generic[SymbolT]):
     def __init__(
-        self, els: list[T], values: npt.NDArray[np.float64], fixed: bool
+        self, els: list[SymbolT], values: npt.NDArray[np.float64], fixed: bool
     ) -> None:
         self._els = els
         self._values = values
         self._fixed = fixed
 
     @property
-    def els(self) -> list[T]:
+    def els(self) -> list[SymbolT]:
         return [*self._els]
 
     @property
@@ -90,7 +85,7 @@ class SymBlock(typing.Generic[T]):
     def shape(self) -> tuple[int, ...]:
         return self._values.shape
 
-    def __setitem__(self, __key: tuple[T, T], v: float) -> None:
+    def __setitem__(self, __key: tuple[SymbolT, SymbolT], v: float) -> None:
         e1, e2 = __key
 
         idx1 = self._els.index(e1)
@@ -98,10 +93,12 @@ class SymBlock(typing.Generic[T]):
         self._values[idx1, idx2] = v
 
     @typing.overload
-    def __getitem__(self, __key: T | str) -> float: ...
+    def __getitem__(self, __key: SymbolT | str) -> float: ...
 
     @typing.overload
-    def __getitem__(self, __key: tuple[T, T] | tuple[str, str]) -> float: ...
+    def __getitem__(
+        self, __key: tuple[SymbolT, SymbolT] | tuple[str, str]
+    ) -> float: ...
 
     @typing.overload
     def __getitem__(
@@ -110,11 +107,16 @@ class SymBlock(typing.Generic[T]):
 
     def __getitem__(
         self,
-        __key: T | str | tuple[T, T] | tuple[str, str] | slice | tuple[slice, slice],
+        __key: SymbolT
+        | str
+        | tuple[SymbolT, SymbolT]
+        | tuple[str, str]
+        | slice
+        | tuple[slice, slice],
     ) -> float | npt.NDArray[np.float64]:
         if isinstance(__key, tuple):
             e1, e2 = __key
-            if isinstance(e1, SymVar) and isinstance(e2, SymVar):
+            if isinstance(e1, Symbol) and isinstance(e2, Symbol):
                 idx1 = self._els.index(e1)
                 idx2 = self._els.index(e2)
                 return self._values[idx1, idx2]

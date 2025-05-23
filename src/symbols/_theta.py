@@ -3,17 +3,15 @@ from __future__ import annotations
 from typing import Any, cast
 from uuid import uuid4
 
-import libcst as cst
 import numpy as np
+from sympy import Symbol
 
-from symbols._symvar import SymVar
-from symbols.to_cst import Cstifiable
 from typings import BoundsType, ValueType
 
 __all__ = ["theta", "Theta"]
 
 
-class Theta(SymVar):
+class Theta(Symbol):
     """
     Theta parameter, which is the fixed effect in nonlinear mixed effects model.
 

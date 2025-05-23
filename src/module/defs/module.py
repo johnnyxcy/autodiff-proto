@@ -5,8 +5,9 @@ import builtins
 import pathlib
 import typing
 
+from sympy import Symbol
+
 from symbols._column import AnyColVar, ColVarCollection
-from symbols._symvar import SymVar
 from utils.inspect_hack import inspect
 
 if typing.TYPE_CHECKING:
@@ -120,7 +121,7 @@ class Module(object, metaclass=ModuleMetaclass):
                 )  # variable_name 不存在重复的，字典的特性决定
 
         for variable_name, variable_obj in namespace.items():
-            if isinstance(variable_obj, SymVar):
+            if isinstance(variable_obj, Symbol):
                 variable_obj.name = variable_name
 
             # if isinstance(variable_obj, Rng):

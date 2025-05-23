@@ -1,8 +1,8 @@
 import inspect
 
 import libcst as cst
+from sympy import Symbol
 
-from symbols._symvar import SymVar
 from syntax.transformers.self_attr import SelfAttrMangler
 from syntax.unparse import unparse
 
@@ -10,8 +10,8 @@ from syntax.unparse import unparse
 def test_simple_symbols():
     class Simple:
         def __init__(self):
-            self.tv = SymVar("tv")
-            self.iiv = SymVar("iiv")
+            self.tv = Symbol("tv")
+            self.iiv = Symbol("iiv")
 
         def pred(self):
             x = self.tv + self.iiv

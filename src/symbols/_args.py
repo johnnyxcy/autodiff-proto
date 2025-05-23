@@ -3,8 +3,8 @@ from __future__ import annotations
 import typing
 
 import libcst as cst
+from sympy import Symbol
 
-from symbols._symvar import SymVar
 from symbols.to_cst import Cstifiable
 
 
@@ -52,8 +52,8 @@ class ParamArgWrt(Cstifiable):
     def __init__(
         self,
         param_arg: str,
-        wrt: SymVar,
-        wrt2nd: SymVar | None = None,
+        wrt: Symbol,
+        wrt2nd: Symbol | None = None,
     ) -> None:
         self._param_name = param_arg
         self._wrt = wrt
@@ -64,11 +64,11 @@ class ParamArgWrt(Cstifiable):
         return self._param_name
 
     @property
-    def wrt(self) -> SymVar:
+    def wrt(self) -> Symbol:
         return self._wrt
 
     @property
-    def wrt2nd(self) -> SymVar | None:
+    def wrt2nd(self) -> Symbol | None:
         return self._wrt2nd
 
     def _as_cst_slices(self) -> typing.Sequence[cst.SubscriptElement]:
@@ -99,8 +99,8 @@ class IndexedParamArgWrt(ParamArgWrt):
     def __init__(
         self,
         param_arg: tuple[str, int],
-        wrt: SymVar,
-        wrt2nd: SymVar | None = None,
+        wrt: Symbol,
+        wrt2nd: Symbol | None = None,
     ) -> None:
         super().__init__(param_arg[0], wrt, wrt2nd)
         self._index = param_arg[1]
@@ -153,14 +153,14 @@ class ParamsArgRack:
     @typing.overload
     def __getitem__(
         self,
-        __key: tuple[str, SymVar] | tuple[str, SymVar, SymVar],
+        __key: tuple[str, Symbol] | tuple[str, Symbol, Symbol],
     ) -> ParamArgWrt:
         """Get a parameter argument derivative with respect to a variable."""
         ...
 
     @typing.overload
     def __getitem__(
-        self, __key: tuple[str, int, SymVar] | tuple[str, int, SymVar, SymVar]
+        self, __key: tuple[str, int, Symbol] | tuple[str, int, Symbol, Symbol]
     ) -> IndexedParamArgWrt:
         """Get a indexed parameter argument derivative with respect to a variable."""
         ...
@@ -169,10 +169,10 @@ class ParamsArgRack:
         self,
         __key: str
         | tuple[str, int]
-        | tuple[str, SymVar]
-        | tuple[str, SymVar, SymVar]
-        | tuple[str, int, SymVar]
-        | tuple[str, int, SymVar, SymVar],
+        | tuple[str, Symbol]
+        | tuple[str, Symbol, Symbol]
+        | tuple[str, int, Symbol]
+        | tuple[str, int, Symbol, Symbol],
     ) -> ParamArg | IndexedParamArg | ParamArgWrt | IndexedParamArgWrt:
         if isinstance(__key, str):
             return self._cls_param_arg(param_name=__key)

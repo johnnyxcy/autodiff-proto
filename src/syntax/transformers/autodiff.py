@@ -25,7 +25,6 @@ from sympy.parsing.sympy_parser import (
     repeated_decimals,
 )
 
-from symbols._symvar import SymVar
 from symbols._x import XWrt
 from symbols.to_cst import parse_sympy_expr
 from syntax.metadata.scope_provider import (
@@ -100,7 +99,7 @@ def auto_symbol(tokens: list[TOKEN], local_dict: DICT, global_dict: DICT):
     return result
 
 
-AutoDiffMap = dict[str, dict[SymVar, Expr]]
+AutoDiffMap = dict[str, dict[Symbol, Expr]]
 ScopedAutoDiffMap = dict[Scope, AutoDiffMap]
 
 
@@ -120,8 +119,8 @@ class AutoDiffTransformer(cst.CSTTransformer):
         source_code: str,
         locals: dict[str, Any],
         globals: dict[str, Any],
-        symbols: list[SymVar] | None = None,
-        wrt: list[SymVar | tuple[SymVar, SymVar]] | None = None,
+        symbols: list[Symbol] | None = None,
+        wrt: list[Symbol | tuple[Symbol, Symbol]] | None = None,
     ):
         self._source_code = source_code
         self._locals = locals
@@ -265,7 +264,7 @@ class AutoDiffTransformer(cst.CSTTransformer):
                                     cst.SimpleStatementLine(
                                         body=[assign_],
                                     ),
-                                    comment=f"# {target.value} wrt {symvar.name}",
+                                    comment=f"# mtran: {target.value} wrt {symvar.name}",
                                 )
                             )
             elif isinstance(stmt, cst.If):

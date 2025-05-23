@@ -7,7 +7,6 @@ import libcst as cst
 from sympy import Expr, Number, Symbol
 
 from symbols._args import ParamArg, ParamArgWrt, ParamsArgRack
-from symbols._symvar import SymVar
 from symbols.to_cst import Cstifiable
 from typings import Expression, ValueType
 
@@ -220,7 +219,7 @@ class CmtSolvedAWrt(Symbol, Cstifiable):
     __slots__ = ("_cmt", "_wrt", "_wrt2nd")
 
     def __new__(
-        cls, cmt: Compartment, wrt: SymVar, wrt2nd: SymVar | None = None
+        cls, cmt: Compartment, wrt: Symbol, wrt2nd: Symbol | None = None
     ) -> CmtSolvedAWrt:
         if wrt2nd is not None:
             name = f"∂²A_{{{cmt.name}}}/∂{wrt.name}∂{wrt2nd.name}"
@@ -237,11 +236,11 @@ class CmtSolvedAWrt(Symbol, Cstifiable):
         return self._cmt
 
     @property
-    def wrt(self) -> SymVar:
+    def wrt(self) -> Symbol:
         return self._wrt
 
     @property
-    def wrt2nd(self) -> SymVar | None:
+    def wrt2nd(self) -> Symbol | None:
         return self._wrt2nd
 
     def as_cst(self) -> cst.BaseExpression:
@@ -299,7 +298,7 @@ class CmtSolvedARack:
 
     @typing.overload
     def __getitem__(
-        self, key: tuple[Compartment, SymVar] | tuple[Compartment, SymVar, SymVar]
+        self, key: tuple[Compartment, Symbol] | tuple[Compartment, Symbol, Symbol]
     ) -> CmtSolvedAWrt:
         """Get the derivative of amount in the compartment with respect to a variable."""
         ...
@@ -307,8 +306,8 @@ class CmtSolvedARack:
     def __getitem__(
         self,
         key: Compartment
-        | tuple[Compartment, SymVar]
-        | tuple[Compartment, SymVar, SymVar],
+        | tuple[Compartment, Symbol]
+        | tuple[Compartment, Symbol, Symbol],
     ) -> CmtSolvedA | CmtSolvedAWrt:
         if isinstance(key, tuple):
             if len(key) == 2:  # first order
@@ -374,16 +373,8 @@ class CmtDADt(Symbol, Cstifiable):
 class CmtDADtWrt(Symbol, Cstifiable):
     __slots__ = ("_cmt", "_wrt", "_wrt2nd")
 
-    @typing.overload
     def __new__(
-        cls, cmt: Compartment, wrt: SymVar, wrt2nd: SymVar | None = None
-    ) -> CmtDADtWrt: ...
-
-    @typing.overload
-    def __new__(cls, cmt: Compartment, wrt: CmtSolvedA) -> CmtDADtWrt: ...
-
-    def __new__(
-        cls, cmt: Compartment, wrt: SymVar | CmtSolvedA, wrt2nd: SymVar | None = None
+        cls, cmt: Compartment, wrt: Symbol | CmtSolvedA, wrt2nd: Symbol | None = None
     ) -> CmtDADtWrt:
         if wrt2nd is not None:
             name = f"∂²dA_{{{cmt.name}}}dt/∂{wrt.name}∂{wrt2nd.name}"
@@ -400,11 +391,11 @@ class CmtDADtWrt(Symbol, Cstifiable):
         return self._cmt
 
     @property
-    def wrt(self) -> SymVar | CmtSolvedA:
+    def wrt(self) -> Symbol | CmtSolvedA:
         return self._wrt
 
     @property
-    def wrt2nd(self) -> SymVar | None:
+    def wrt2nd(self) -> Symbol | None:
         return self._wrt2nd
 
     def as_cst(self) -> cst.BaseExpression:
@@ -461,15 +452,15 @@ class CmtDADtRack:
     @typing.overload
     def __getitem__(
         self,
-        key: tuple[Compartment, SymVar | CmtSolvedA]
-        | tuple[Compartment, SymVar, SymVar],
+        key: tuple[Compartment, Symbol | CmtSolvedA]
+        | tuple[Compartment, Symbol, Symbol],
     ) -> CmtDADtWrt: ...
 
     def __getitem__(
         self,
         key: Compartment
-        | tuple[Compartment, SymVar | CmtSolvedA]
-        | tuple[Compartment, SymVar, SymVar],
+        | tuple[Compartment, Symbol | CmtSolvedA]
+        | tuple[Compartment, Symbol, Symbol],
     ) -> CmtDADt | CmtDADtWrt:
         if isinstance(key, tuple):
             if len(key) == 2:  # first order
@@ -503,8 +494,8 @@ class CmtParamArgWrt(ParamArgWrt):
         self,
         param_name: str,
         cmt: Compartment,
-        wrt: SymVar,
-        wrt2nd: SymVar | None = None,
+        wrt: Symbol,
+        wrt2nd: Symbol | None = None,
     ) -> None:
         super().__init__(param_name, wrt, wrt2nd)
         self._cmt = cmt
@@ -857,7 +848,7 @@ class Compartment:
         return self._default_obs
 
     def __getitem__(
-        self, __key: str | tuple[str, SymVar] | tuple[str, SymVar, SymVar]
+        self, __key: str | tuple[str, Symbol] | tuple[str, Symbol, Symbol]
     ) -> ParamArg | ParamArgWrt:
         return ParamsArgRack(
             cls_param_arg=CmtParamArg,

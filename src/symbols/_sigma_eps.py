@@ -6,12 +6,13 @@ from uuid import uuid4
 
 import numpy as np
 import numpy.typing as npt
+from sympy import Symbol
 
-from symbols._symvar import Block, SymBlock, SymVar
+from symbols._block import Block, SymbolBlock
 from typings import ValueType
 
 
-class Eps(SymVar):
+class Eps(Symbol):
     """
     Eps parameter, which is the intraindividual variability in nonlinear mixed effects model.
 
@@ -47,7 +48,7 @@ class Eps(SymVar):
         raise ValueError("Never deepcopy Eps. Deepcopy Sigma instead")
 
 
-class Sigma(SymBlock[Eps]):
+class Sigma(SymbolBlock[Eps]):
     """Intraindividual variability Matrix.
 
     Attributes

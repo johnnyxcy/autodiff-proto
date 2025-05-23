@@ -246,6 +246,8 @@ def distill(mod: Module, src: str | None = None) -> ModuleInterpretation:
         pred_func_def.src,
     )
 
+    # TODO: should save CST here before autodiff
+
     # Transform 2: Automatic Gradient
     autodiff_transformer = AutoDiffTransformer(
         source_code=pred_func_def.src,

@@ -6,14 +6,15 @@ from uuid import uuid4
 
 import numpy as np
 import numpy.typing as npt
+from sympy import Symbol
 
-from symbols._symvar import Block, SymBlock, SymVar
+from symbols._block import Block, SymbolBlock
 from typings import ValueType
 
 __all__ = ["omega", "omega_sd", "omega_iov", "omega_iov_sd", "Omega", "OmegaIOV", "Eta"]
 
 
-class Eta(SymVar):
+class Eta(Symbol):
     """
     Eta parameter, which is the interindividual variability in nonlinear mixed effects model.
 
@@ -50,7 +51,7 @@ class Eta(SymVar):
         raise ValueError("Never deepcopy Eta. Deepcopy Omega instead")
 
 
-class Omega(SymBlock[Eta]):
+class Omega(SymbolBlock[Eta]):
     """Interindividual variability matrix.
 
 
