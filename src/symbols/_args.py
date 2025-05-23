@@ -5,7 +5,7 @@ import typing
 import libcst as cst
 from sympy import Symbol
 
-from symbols.to_cst import Cstifiable
+from typings import Cstifiable
 
 
 class ParamArg(Cstifiable):

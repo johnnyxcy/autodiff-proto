@@ -45,7 +45,7 @@ class CSTAndSrc(Generic[T]):
 
 
 @dataclass(kw_only=True)
-class ModuleInterpretation:
+class ModuleDistillation:
     _o: Module
 
     thetas: list[Theta]
@@ -64,7 +64,7 @@ class ModuleInterpretation:
     globals: dict[str, Any] = field(default_factory=dict)
 
 
-def distill(mod: Module, src: str | None = None) -> ModuleInterpretation:
+def distill(mod: Module, src: str | None = None) -> ModuleDistillation:
     logger.debug(
         "[MTran::interpret] Start interpreting module: %s", mod.__class__.__name__
     )
@@ -262,7 +262,7 @@ def distill(mod: Module, src: str | None = None) -> ModuleInterpretation:
         pred_func_def.src,
     )
 
-    return ModuleInterpretation(
+    return ModuleDistillation(
         _o=mod,
         thetas=thetas,
         etas=etas,

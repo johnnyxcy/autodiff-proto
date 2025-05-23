@@ -3,7 +3,7 @@ from __future__ import annotations
 import libcst as cst
 from sympy import Expr, Symbol
 
-from symbols.to_cst import Cstifiable
+from typings import Cstifiable
 
 
 class XWrt(Symbol, Cstifiable):

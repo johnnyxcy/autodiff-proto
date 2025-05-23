@@ -35,6 +35,8 @@ from syntax.rethrow import rethrow
 from syntax.unparse import unparse
 from syntax.with_comment import with_comment
 
+__all__ = ["AutoDiffTransformer"]
+
 
 def auto_symbol(tokens: list[TOKEN], local_dict: DICT, global_dict: DICT):
     """Inserts calls to ``Symbol``/``Function`` for undefined variables."""

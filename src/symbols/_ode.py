@@ -7,8 +7,7 @@ import libcst as cst
 from sympy import Expr, Number, Symbol
 
 from symbols._args import ParamArg, ParamArgWrt, ParamsArgRack
-from symbols.to_cst import Cstifiable
-from typings import Expression, ValueType
+from typings import Cstifiable, Expression, ValueType
 
 
 class IntegralT(Symbol):

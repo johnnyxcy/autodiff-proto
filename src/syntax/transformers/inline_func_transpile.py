@@ -14,6 +14,8 @@ from sympy.core.function import FunctionClass
 
 from syntax.eval import eval_token
 
+__all__ = ["InlineFunctionTranspiler"]
+
 
 class Mangler(Protocol):
     def __call__(self, name: str) -> str:

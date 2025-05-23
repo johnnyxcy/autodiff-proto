@@ -1,5 +1,7 @@
 import libcst as cst
 
+__all__ = ["SuperCallFixer"]
+
 
 class SuperCallFixer(cst.CSTTransformer):
     """

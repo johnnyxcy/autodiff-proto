@@ -1,5 +1,3 @@
-from typing import Protocol, runtime_checkable
-
 import libcst as cst
 from sympy import (
     Add,
@@ -20,14 +18,7 @@ from sympy import (
 )
 from sympy.core.relational import Relational
 
-
-@runtime_checkable
-class Cstifiable(Protocol):
-    def as_cst(self) -> cst.BaseExpression:
-        """
-        Convert the XWrt object to a CST expression.
-        """
-        ...
+from typings import Cstifiable
 
 
 def parse_sympy_expr(expr: Basic | int | float) -> cst.BaseExpression:
@@ -60,7 +51,7 @@ def parse_sympy_expr(expr: Basic | int | float) -> cst.BaseExpression:
         # We have many symbols that needed to be handled
         if isinstance(expr, Cstifiable):
             # This is a special case, we need to handle it
-            return expr.as_cst()
+            return cst.ensure_type(expr.as_cst(), cst.BaseExpression)
         return cst.Name(value=expr.name)
 
     if isinstance(expr, Add):

@@ -4,7 +4,7 @@ import typing
 
 from sympy import Symbol
 
-from symbols.to_cst import Cstifiable
+from typings import Cstifiable
 
 
 class SharedVar(Symbol):
