@@ -6,11 +6,10 @@ from symbols._omega_eta import Eta
 from symbols._sharedvar import SharedVar
 from symbols._sigma_eps import Eps
 from symbols._theta import Theta
-from typings import AsCST
 
 
 @dataclass(kw_only=True, frozen=True)
-class ModuleDescriptor(AsCST):
+class ModuleDescriptor:
     thetas: list[Theta]
     etas: list[Eta]
     epsilons: list[Eps]

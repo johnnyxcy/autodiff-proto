@@ -10,7 +10,7 @@ import numpy.typing as npt
 from sympy import Symbol
 
 from symbols._block import Block, SymbolBlock
-from typings import AsCST, ValueType
+from typings import CodeGen, ValueType
 
 
 class Eps(Symbol):
@@ -49,7 +49,7 @@ class Eps(Symbol):
         raise ValueError("Never deepcopy Eps. Deepcopy Sigma instead")
 
 
-class Sigma(SymbolBlock[Eps], AsCST):
+class Sigma(SymbolBlock[Eps], CodeGen):
     """Intraindividual variability Matrix.
 
     Attributes
@@ -71,7 +71,7 @@ class Sigma(SymbolBlock[Eps], AsCST):
 
         return self_
 
-    def as_cst(self):
+    def _code_gen(self):
         values = self.values
 
         lhs_targets = [cst.AssignTarget(cst.Name(value=name)) for name in self.names]

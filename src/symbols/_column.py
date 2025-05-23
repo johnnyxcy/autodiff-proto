@@ -6,7 +6,7 @@ from _collections_abc import dict_items, dict_keys, dict_values
 import libcst as cst
 from sympy import Symbol
 
-from typings import AsCST
+from typings import CodeGen
 
 ColumnDtypeLiteral = typing.Literal["numeric", "str"]
 ColumnDtypeTypeAlias = typing.Type[int | float | str]
@@ -17,7 +17,7 @@ def is_numeric_dtype(dtype: ColumnDtype) -> bool:
     return dtype == "numeric" or dtype in [int, float]
 
 
-class ColVar(AsCST):
+class ColVar(CodeGen):
     """Column variable."""
 
     name: str
@@ -51,7 +51,7 @@ class ColVar(AsCST):
     def as_pretty_str(self) -> str:
         return f"{type(self).__qualname__}(name={self.name}, col_name={self.col_name}, dtype={self.dtype}, is_categorical={self.is_categorical})"
 
-    def as_cst(self):
+    def _code_gen(self):
         args: list[cst.Arg] = [cst.Arg(cst.Name(value=self.col_name))]
         if self.dtype != "numeric":
             args.append(

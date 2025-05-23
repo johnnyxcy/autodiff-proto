@@ -18,8 +18,6 @@ from sympy import (
 )
 from sympy.core.relational import Relational
 
-from typings import AsCSTExpression
-
 
 def parse_sympy_expr(expr: Basic | int | float) -> cst.BaseExpression:
     """
@@ -49,9 +47,9 @@ def parse_sympy_expr(expr: Basic | int | float) -> cst.BaseExpression:
 
     if isinstance(expr, Symbol):
         # We have many symbols that needed to be handled
-        if isinstance(expr, AsCSTExpression):
+        if isinstance(expr, Cstifiable):
             # This is a special case, we need to handle it
-            return cst.ensure_type(expr.as_cst_expression(), cst.BaseExpression)
+            return expr.as_cst()
         return cst.Name(value=expr.name)
 
     if isinstance(expr, Add):

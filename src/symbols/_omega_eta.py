@@ -10,7 +10,7 @@ import numpy.typing as npt
 from sympy import Symbol
 
 from symbols._block import Block, SymbolBlock
-from typings import AsCST, ValueType
+from typings import CodeGen, ValueType
 
 __all__ = ["omega", "omega_sd", "omega_iov", "omega_iov_sd", "Omega", "OmegaIOV", "Eta"]
 
@@ -52,7 +52,7 @@ class Eta(Symbol):
         raise ValueError("Never deepcopy Eta. Deepcopy Omega instead")
 
 
-class Omega(SymbolBlock[Eta], AsCST):
+class Omega(SymbolBlock[Eta], CodeGen):
     """Interindividual variability matrix.
 
 
@@ -75,7 +75,7 @@ class Omega(SymbolBlock[Eta], AsCST):
 
         return self_
 
-    def as_cst(self):
+    def _code_gen(self):
         values = self.values
 
         lhs_targets = [cst.AssignTarget(cst.Name(value=name)) for name in self.names]

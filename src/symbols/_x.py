@@ -3,10 +3,10 @@ from __future__ import annotations
 import libcst as cst
 from sympy import Expr, Symbol
 
-from typings import AsCST
+from typings import AsCSTExpression
 
 
-class XWrt(Symbol, AsCST):
+class XWrt(Symbol, AsCSTExpression):
     """
     A class to represent an arbitrary variable X with respect to a symvar wrt.
 
@@ -38,7 +38,7 @@ class XWrt(Symbol, AsCST):
     def wrt2nd(self) -> Symbol | None:
         return self._wrt2nd
 
-    def as_cst(self) -> cst.BaseExpression:
+    def as_cst_expression(self):
         """
         Convert the XWrt object to a CST expression.
         """

@@ -7,7 +7,7 @@ import libcst as cst
 from sympy import Expr, Number, Symbol
 
 from symbols._args import ParamArg, ParamArgWrt, ParamsArgRack
-from typings import AsCST, Expression, ValueType
+from typings import AsCSTExpression, Expression, ValueType
 
 
 class IntegralT(Symbol):
@@ -172,7 +172,7 @@ class CmtInitialA(Symbol):
         return self._expr
 
 
-class CmtSolvedA(Symbol, AsCST):
+class CmtSolvedA(Symbol, AsCSTExpression):
     """Class of solved compartment amounts.
 
     Attributes
@@ -194,7 +194,7 @@ class CmtSolvedA(Symbol, AsCST):
         """Compartment: Corresponding compartment."""
         return self._cmt
 
-    def as_cst(self) -> cst.BaseExpression:
+    def as_cst_expression(self) -> cst.BaseExpression:
         """
         Convert the CmtSolvedA object to a CST expression.
         """
@@ -214,7 +214,7 @@ class CmtSolvedA(Symbol, AsCST):
         )
 
 
-class CmtSolvedAWrt(Symbol, AsCST):
+class CmtSolvedAWrt(Symbol, AsCSTExpression):
     __slots__ = ("_cmt", "_wrt", "_wrt2nd")
 
     def __new__(
@@ -242,7 +242,7 @@ class CmtSolvedAWrt(Symbol, AsCST):
     def wrt2nd(self) -> Symbol | None:
         return self._wrt2nd
 
-    def as_cst(self) -> cst.BaseExpression:
+    def as_cst_expression(self) -> cst.BaseExpression:
         """
         Convert the CmtSolvedAWrt object to a CST expression.
         """
@@ -319,7 +319,7 @@ class CmtSolvedARack:
             return key.A
 
 
-class CmtDADt(Symbol, AsCST):
+class CmtDADt(Symbol, AsCSTExpression):
     """Class of compartment dAdt.
 
     Attributes
@@ -349,7 +349,7 @@ class CmtDADt(Symbol, AsCST):
         """Expression: Expression of dAdt."""
         return self._expr
 
-    def as_cst(self) -> cst.BaseExpression:
+    def as_cst_expression(self) -> cst.BaseExpression:
         """
         Convert the CmtDADt object to a CST expression.
         """
@@ -369,7 +369,7 @@ class CmtDADt(Symbol, AsCST):
         )
 
 
-class CmtDADtWrt(Symbol, AsCST):
+class CmtDADtWrt(Symbol, AsCSTExpression):
     __slots__ = ("_cmt", "_wrt", "_wrt2nd")
 
     def __new__(
@@ -397,7 +397,7 @@ class CmtDADtWrt(Symbol, AsCST):
     def wrt2nd(self) -> Symbol | None:
         return self._wrt2nd
 
-    def as_cst(self) -> cst.BaseExpression:
+    def as_cst_expression(self) -> cst.BaseExpression:
         """
         Convert the CmtDADtWrt object to a CST expression.
         """
@@ -481,7 +481,7 @@ class CmtParamArg(ParamArg):
     def cmt(self) -> Compartment:
         return self._cmt
 
-    def as_cst(self) -> cst.BaseExpression:
+    def as_cst_expression(self) -> cst.BaseExpression:
         return cst.Subscript(
             value=cst.Name(ParamsArgRack.name),
             slice=self._as_cst_slices(),
@@ -503,7 +503,7 @@ class CmtParamArgWrt(ParamArgWrt):
     def cmt(self) -> Compartment:
         return self._cmt
 
-    def as_cst(self) -> cst.BaseExpression:
+    def as_cst_expression(self) -> cst.BaseExpression:
         return cst.Subscript(
             value=cst.Name(ParamsArgRack.name),
             slice=self._as_cst_slices(),

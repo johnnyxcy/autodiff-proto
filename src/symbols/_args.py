@@ -5,10 +5,10 @@ import typing
 import libcst as cst
 from sympy import Symbol
 
-from typings import AsCST
+from typings import AsCSTExpression
 
 
-class ParamArg(AsCST):
+class ParamArg(AsCSTExpression):
     def __init__(self, param_name: str) -> None:
         self._param_name = param_name
 
@@ -21,7 +21,7 @@ class ParamArg(AsCST):
             cst.SubscriptElement(cst.Index(cst.SimpleString(value=self.param_name))),
         ]
 
-    def as_cst(self) -> cst.BaseExpression:
+    def as_cst_expression(self) -> cst.BaseExpression:
         return cst.Subscript(
             value=cst.Name(ParamsArgRack.name),
             slice=self._as_cst_slices(),
@@ -48,7 +48,7 @@ class IndexedParamArg(ParamArg):
         ]
 
 
-class ParamArgWrt(AsCST):
+class ParamArgWrt(AsCSTExpression):
     def __init__(
         self,
         param_arg: str,
@@ -88,7 +88,7 @@ class ParamArgWrt(AsCST):
             )
         return slice_elements
 
-    def as_cst(self) -> cst.BaseExpression:
+    def as_cst_expression(self) -> cst.BaseExpression:
         return cst.Subscript(
             value=cst.Name(ParamsArgRack.name),
             slice=self._as_cst_slices(),
