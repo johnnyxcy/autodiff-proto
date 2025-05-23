@@ -168,13 +168,8 @@ class AutoDiffTransformer(cst.CSTTransformer):
                     source_code=self._source_code,
                 )
 
-            if target in self._scoped_auto_diff[scope]:
-                rethrow(
-                    SyntaxError(f"Variable '{target}' is already defined"),
-                    node,
-                    source_code=self._source_code,
-                )
-            self._scoped_auto_diff[scope][target.value] = {}
+            if target.value not in self._scoped_auto_diff[scope]:
+                self._scoped_auto_diff[scope][target.value] = {}
 
             # Evaluate the value of the assignment
             value = node.value
@@ -189,15 +184,26 @@ class AutoDiffTransformer(cst.CSTTransformer):
                         wrt2nd = None
                     first_order_deriv = evaluated_value.diff(wrt)
                     for symbol in evaluated_value.free_symbols:
-                        if (
-                            isinstance(symbol, Symbol)
-                            and symbol.name in scope.assignments
-                        ):
+                        if isinstance(symbol, Symbol) and symbol.name in scope:
                             s_ = (
                                 self._scoped_auto_diff[scope]
                                 .get(symbol.name, {})
                                 .get(wrt1st, None)
                             )
+                            parent_scope = scope._next_visible_parent(scope)
+                            while s_ is None:  # look for parent scopes
+                                if (
+                                    parent_scope is scope.globals
+                                ):  # If we reach the top-level global scope, break
+                                    break
+                                s_ = (
+                                    self._scoped_auto_diff[parent_scope]
+                                    .get(symbol.name, {})
+                                    .get(wrt1st, None)
+                                )
+                                parent_scope = parent_scope._next_visible_parent(
+                                    parent_scope
+                                )
 
                             if s_ is not None:
                                 if isinstance(s_, Number):

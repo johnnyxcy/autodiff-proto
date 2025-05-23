@@ -33,7 +33,7 @@ class CmtAlag(Symbol):
     __slots__ = ("_cmt", "_expr")
 
     def __new__(cls, cmt: Compartment) -> CmtAlag:
-        name = f"Alag_{cmt.name}"
+        name = f"Alag_{{{cmt.name}}}"
         instance = typing.cast(CmtAlag, super().__new__(cls, name))
         instance._cmt = cmt
         instance._expr = 0.0
@@ -64,7 +64,7 @@ class CmtFraction(Symbol):
     __slots__ = ("_cmt", "_expr")
 
     def __new__(cls, cmt: Compartment) -> CmtFraction:
-        name = f"Fraction_{cmt.name}"
+        name = f"Fraction_{{{cmt.name}}}"
         instance = typing.cast(CmtFraction, super().__new__(cls, name))
         instance._cmt = cmt
         instance._expr = 1.0
@@ -95,7 +95,7 @@ class CmtRate(Symbol):
     __slots__ = ("_cmt", "_expr")
 
     def __new__(cls, cmt: Compartment) -> CmtRate:
-        name = f"Rate_{cmt.name}"
+        name = f"Rate_{{{cmt.name}}}"
         instance = typing.cast(CmtRate, super().__new__(cls, name))
         instance._cmt = cmt
         instance._expr = 0.0
@@ -126,7 +126,7 @@ class CmtDuration(Symbol):
     __slots__ = ("_cmt", "_expr")
 
     def __new__(cls, cmt: Compartment) -> CmtDuration:
-        name = f"Duration_{cmt.name}"
+        name = f"Duration_{{{cmt.name}}}"
         instance = typing.cast(CmtDuration, super().__new__(cls, name))
         instance._cmt = cmt
         instance._expr = 0.0
@@ -157,7 +157,7 @@ class CmtInitialA(Symbol):
     __slots__ = ("_cmt", "_expr")
 
     def __new__(cls, cmt: Compartment) -> CmtInitialA:
-        name = f"A0_{cmt.name}"
+        name = f"A0_{{{cmt.name}}}"
         instance = typing.cast(CmtInitialA, super().__new__(cls, name))
         instance._cmt = cmt
         instance._expr = 0.0
@@ -186,7 +186,7 @@ class CmtSolvedA(Symbol, Cstifiable):
     __slots__ = "_cmt"
 
     def __new__(cls, cmt: Compartment) -> CmtSolvedA:
-        name = f"A_{cmt.name}"
+        name = f"A_{{{cmt.name}}}"
         instance = typing.cast(CmtSolvedA, super().__new__(cls, name))
         instance._cmt = cmt
         return instance
@@ -222,9 +222,10 @@ class CmtSolvedAWrt(Symbol, Cstifiable):
     def __new__(
         cls, cmt: Compartment, wrt: SymVar, wrt2nd: SymVar | None = None
     ) -> CmtSolvedAWrt:
-        name = f"dA_{cmt.name}_d{wrt.name}"
-        if wrt2nd:
-            name += f"_d{wrt2nd.name}"
+        if wrt2nd is not None:
+            name = f"∂²A_{{{cmt.name}}}/∂{wrt.name}∂{wrt2nd.name}"
+        else:
+            name = f"∂A_{{{cmt.name}}}/∂{wrt.name}"
         instance = typing.cast(CmtSolvedAWrt, super().__new__(cls, name))
         instance._cmt = cmt
         instance._wrt = wrt
@@ -334,7 +335,7 @@ class CmtDADt(Symbol, Cstifiable):
     __slots__ = ("_cmt", "_expr")
 
     def __new__(cls, cmt: Compartment) -> CmtDADt:
-        name = f"dA_{cmt.name}dt"
+        name = f"dA_{{{cmt.name}}}dt"
         instance = typing.cast(CmtDADt, super().__new__(cls, name))
         instance._cmt = cmt
         instance._expr = Number(0.0)
@@ -384,13 +385,10 @@ class CmtDADtWrt(Symbol, Cstifiable):
     def __new__(
         cls, cmt: Compartment, wrt: SymVar | CmtSolvedA, wrt2nd: SymVar | None = None
     ) -> CmtDADtWrt:
-        if isinstance(wrt, CmtSolvedA):
-            wrt_name = wrt.cmt.name
+        if wrt2nd is not None:
+            name = f"∂²dA_{{{cmt.name}}}dt/∂{wrt.name}∂{wrt2nd.name}"
         else:
-            wrt_name = wrt.name
-        name = f"dA_{cmt.name}dt_d{wrt_name}"
-        if wrt2nd:
-            name += f"_d{wrt2nd.name}"
+            name = f"∂dA_{{{cmt.name}}}dt/∂{wrt.name}"
         instance = typing.cast(CmtDADtWrt, super().__new__(cls, name))
         instance._cmt = cmt
         instance._wrt = wrt

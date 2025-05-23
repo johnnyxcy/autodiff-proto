@@ -14,13 +14,22 @@ class XWrt(Symbol, Cstifiable):
     For example, p = tv * exp(iiv) and wrt = iiv, then XWrt(p, iiv) = __mX__[p, iiv] = ∂p/∂iiv.
     """
 
-    __slots__ = ("_wrt", "_wrt2nd")
+    __slots__ = ("_xname", "_wrt", "_wrt2nd")
 
-    def __new__(cls, name: str, wrt: SymVar, wrt2nd: SymVar | None = None) -> XWrt:
+    def __new__(cls, xname: str, wrt: SymVar, wrt2nd: SymVar | None = None) -> XWrt:
+        if wrt2nd is not None:
+            name = f"∂²{xname}/∂{wrt.name}∂{wrt2nd.name}"
+        else:
+            name = f"∂{xname}/∂{wrt.name}"
         self_ = super().__new__(cls, name)
+        self_._xname = xname
         self_._wrt = wrt
         self_._wrt2nd = wrt2nd
         return self_
+
+    @property
+    def xname(self) -> str:
+        return self._xname
 
     @property
     def wrt(self) -> SymVar:
@@ -36,7 +45,7 @@ class XWrt(Symbol, Cstifiable):
         """
         slice = [
             cst.SubscriptElement(
-                slice=cst.Index(cst.Name(value=self.name)),
+                slice=cst.Index(cst.Name(value=self.xname)),
             ),
         ]
         wrt1st = cst.SubscriptElement(
