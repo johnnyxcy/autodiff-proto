@@ -17,6 +17,19 @@ class NoPrivateVisitor(cst.CSTVisitor):
         self._source_code = source_code
 
     def visit_Name(self, node: cst.Name) -> None:
+        """
+        Visit a Name node in the CST.
+
+        If the name starts with double underscores, it is considered a private variable.
+        Raises a NameError if a private variable is found, indicating that it is reserved for internal use.
+        """
+        if node.value in (
+            "__self__",
+            "__class__",
+            "__init__",
+        ):
+            # Allow __self__ as it is used in the module descriptor
+            return
         if node.value.startswith("__"):
             rethrow(
                 NameError(
