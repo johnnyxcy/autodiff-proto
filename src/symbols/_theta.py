@@ -7,12 +7,12 @@ import libcst as cst
 import numpy as np
 from sympy import Symbol
 
-from typings import BoundsType, CodeGen, ValueType
+from typings import AsCSTExpression, BoundsType, CodeGen, ValueType
 
 __all__ = ["theta", "Theta"]
 
 
-class Theta(Symbol, CodeGen):
+class Theta(Symbol, CodeGen, AsCSTExpression):
     """
     Theta parameter, which is the fixed effect in nonlinear mixed effects model.
 
@@ -43,6 +43,15 @@ class Theta(Symbol, CodeGen):
         instance.init_value = init_value
         instance._fixed = fixed
         return instance
+
+    def as_cst_expression(self) -> cst.BaseExpression:
+        """
+        Convert the Theta object to a CST expression.
+        """
+        return cst.Attribute(
+            value=cst.Name(value="self"),
+            attr=cst.Name(value=self.name),
+        )
 
     def _code_gen(self):
         args = [

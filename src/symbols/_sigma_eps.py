@@ -10,10 +10,10 @@ import numpy.typing as npt
 from sympy import Symbol
 
 from symbols._block import Block, SymbolBlock
-from typings import CodeGen, ValueType
+from typings import AsCSTExpression, CodeGen, ValueType
 
 
-class Eps(Symbol):
+class Eps(Symbol, AsCSTExpression):
     """
     Eps parameter, which is the intraindividual variability in nonlinear mixed effects model.
 
@@ -33,6 +33,15 @@ class Eps(Symbol):
 
     def __new__(cls, name: str, **kwargs: typing.Any) -> Eps:
         return typing.cast(Eps, super().__new__(cls, name, **kwargs))
+
+    def as_cst_expression(self) -> cst.BaseExpression:
+        """
+        Convert the Eta object to a CST expression.
+        """
+        return cst.Attribute(
+            value=cst.Name(value="self"),
+            attr=cst.Name(value=self.name),
+        )
 
     @property
     def sigma(self) -> Sigma:

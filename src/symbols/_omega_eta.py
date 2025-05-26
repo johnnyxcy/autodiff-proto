@@ -10,12 +10,12 @@ import numpy.typing as npt
 from sympy import Symbol
 
 from symbols._block import Block, SymbolBlock
-from typings import CodeGen, ValueType
+from typings import AsCSTExpression, CodeGen, ValueType
 
 __all__ = ["omega", "omega_sd", "omega_iov", "omega_iov_sd", "Omega", "OmegaIOV", "Eta"]
 
 
-class Eta(Symbol):
+class Eta(Symbol, AsCSTExpression):
     """
     Eta parameter, which is the interindividual variability in nonlinear mixed effects model.
 
@@ -36,6 +36,15 @@ class Eta(Symbol):
     def __new__(cls, name: str, **kwargs: typing.Any) -> Eta:
         instance = typing.cast(Eta, super().__new__(cls, name, **kwargs))
         return instance
+
+    def as_cst_expression(self) -> cst.BaseExpression:
+        """
+        Convert the Eta object to a CST expression.
+        """
+        return cst.Attribute(
+            value=cst.Name(value="self"),
+            attr=cst.Name(value=self.name),
+        )
 
     @property
     def omega(self) -> Omega:

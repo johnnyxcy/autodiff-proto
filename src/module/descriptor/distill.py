@@ -10,6 +10,7 @@ import libcst as cst
 from module.defs.module import Module
 from module.defs.ode import OdeModule
 from symbols._column import AnyColVar, ColVar, ColVarCollection
+from symbols._ns import SymbolDefs
 from symbols._ode import Compartment
 from symbols._omega_eta import Eta
 from symbols._sharedvar import SharedVar
@@ -253,8 +254,8 @@ def distill(mod: Module, src: str | None = None) -> ModuleDistillation:
         source_code=pred_func_def.src,
         locals=locals,
         globals=globals,
-        symbols=[*thetas, *etas, *epsilons],
-        wrt=[*etas],
+        symbol_defs=SymbolDefs([*thetas, *etas, *epsilons, *cmts]),
+        wrt=[*etas, cmts[0].A],
     )
     pred_func_def = pred_func_def.apply_transform(autodiff_transformer)
     logger.debug(

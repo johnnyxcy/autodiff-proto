@@ -6,6 +6,21 @@ from sympy import Expr, Symbol
 from typings import AsCSTExpression
 
 
+class X(Symbol):
+    """
+    A class to represent an arbitrary variable X.
+
+    For example, p = tv * exp(iiv), then p can be represented as X('p').
+    """
+
+    @property
+    def xname(self) -> str:
+        """
+        Get the name of the variable.
+        """
+        return self.name
+
+
 class XWrt(Symbol, AsCSTExpression):
     """
     A class to represent an arbitrary variable X with respect to a symvar wrt.
@@ -47,26 +62,43 @@ class XWrt(Symbol, AsCSTExpression):
                 slice=cst.Index(cst.Name(value=self.xname)),
             ),
         ]
-        wrt1st = cst.SubscriptElement(
-            cst.Index(
-                cst.Attribute(
-                    value=cst.Name("self"),
-                    attr=cst.Name(self.wrt.name),
+        if isinstance(self.wrt, AsCSTExpression):
+            slice.append(
+                cst.SubscriptElement(
+                    slice=cst.Index(self.wrt.as_cst_expression()),
                 )
             )
-        )
-        slice.append(wrt1st)
-
-        if self.wrt2nd is not None:
-            wrt2nd = cst.SubscriptElement(
-                cst.Index(
-                    cst.Attribute(
-                        value=cst.Name("self"),
-                        attr=cst.Name(self.wrt2nd.name),
+        else:
+            slice.append(
+                cst.SubscriptElement(
+                    cst.Index(
+                        cst.Attribute(
+                            value=cst.Name("self"),
+                            attr=cst.Name(self.wrt.name),
+                        )
                     )
                 )
             )
-            slice.append(wrt2nd)
+
+        if self.wrt2nd is not None:
+            if isinstance(self.wrt2nd, AsCSTExpression):
+                slice.append(
+                    cst.SubscriptElement(
+                        slice=cst.Index(self.wrt2nd.as_cst_expression())
+                    )
+                )
+            else:
+                # self.wrt2nd is a Symbol
+                slice.append(
+                    cst.SubscriptElement(
+                        cst.Index(
+                            cst.Attribute(
+                                value=cst.Name("self"),
+                                attr=cst.Name(self.wrt2nd.name),
+                            )
+                        )
+                    )
+                )
 
         return cst.Subscript(value=cst.Name(XWrtRack.name), slice=slice)
 

@@ -1,7 +1,6 @@
 from sympy import exp
 
 from functions.stats import normal_cdf
-from module.defs.module import Module
 from module.defs.ode import OdeModule
 from module.descriptor.distill import distill
 from symbols._ode import compartment
@@ -28,11 +27,22 @@ class MyDef(OdeModule):
     def pred(self):
         self.cmt1.dAdt = self.cmt1.A
         self.cmt2.dAdt = self.cmt1.A + self.cmt2.A
-        return add(self.a, self.b) + normal_cdf(self.c * exp(self.d))
+        z = self.cmt1.A
+        return add(self.a, self.b) + normal_cdf(z + self.c * exp(self.d))
 
 
 if __name__ == "__main__":
-    # Example usage
-    my_def = MyDef(1, 2, 3)
+    from math import floor
 
-    interpreted = distill(my_def)
+    import numpy as np
+
+    end = 24
+    start = 0
+    interval = 9
+
+    num = floor((end - start) / interval) + 1
+
+    print(np.linspace(0, 24, num=num, endpoint=True))
+    # my_def = MyDef(1, 2, 3)
+
+    # interpreted = distill(my_def)

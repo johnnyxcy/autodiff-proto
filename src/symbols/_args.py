@@ -74,18 +74,30 @@ class ParamArgWrt(AsCSTExpression):
     def _as_cst_slices(self) -> typing.Sequence[cst.SubscriptElement]:
         slice_elements: list[cst.SubscriptElement] = [
             cst.SubscriptElement(cst.Index(cst.SimpleString(value=self.param_name))),
-            cst.SubscriptElement(
-                cst.Index(cst.Attribute(cst.Name("self"), cst.Name(self.wrt.name)))
-            ),
         ]
-        if self.wrt2nd is not None:
+        if isinstance(self.wrt, AsCSTExpression):
+            slice_elements.append(
+                cst.SubscriptElement(cst.Index(self.wrt.as_cst_expression()))
+            )
+        else:
             slice_elements.append(
                 cst.SubscriptElement(
-                    cst.Index(
-                        cst.Attribute(cst.Name("self"), cst.Name(self.wrt2nd.name))
-                    )
+                    cst.Index(cst.Attribute(cst.Name("self"), cst.Name(self.wrt.name)))
                 )
             )
+        if self.wrt2nd is not None:
+            if isinstance(self.wrt2nd, AsCSTExpression):
+                slice_elements.append(
+                    cst.SubscriptElement(cst.Index(self.wrt2nd.as_cst_expression()))
+                )
+            else:
+                slice_elements.append(
+                    cst.SubscriptElement(
+                        cst.Index(
+                            cst.Attribute(cst.Name("self"), cst.Name(self.wrt2nd.name))
+                        )
+                    )
+                )
         return slice_elements
 
     def as_cst_expression(self) -> cst.BaseExpression:

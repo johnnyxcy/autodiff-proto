@@ -206,7 +206,7 @@ class CmtSolvedA(Symbol, AsCSTExpression):
                     slice=cst.Index(
                         cst.Attribute(
                             value=cst.Name("self"),
-                            attr=cst.Name(self.name),
+                            attr=cst.Name(self.cmt.name),
                         )
                     ),
                 ),
@@ -251,30 +251,40 @@ class CmtSolvedAWrt(Symbol, AsCSTExpression):
                 slice=cst.Index(
                     cst.Attribute(
                         value=cst.Name("self"),
-                        attr=cst.Name(self.name),
+                        attr=cst.Name(self.cmt.name),
                     )
                 ),
             ),
         ]
-        wrt1st = cst.SubscriptElement(
-            cst.Index(
-                cst.Attribute(
-                    value=cst.Name("self"),
-                    attr=cst.Name(self.wrt.name),
-                )
+        if isinstance(self.wrt, AsCSTExpression):
+            wrt1st = cst.SubscriptElement(
+                cst.Index(self.wrt.as_cst_expression()),
             )
-        )
-        slice.append(wrt1st)
-
-        if self.wrt2nd is not None:
-            wrt2nd = cst.SubscriptElement(
+        else:
+            wrt1st = cst.SubscriptElement(
                 cst.Index(
                     cst.Attribute(
                         value=cst.Name("self"),
-                        attr=cst.Name(self.wrt2nd.name),
+                        attr=cst.Name(self.wrt.name),
                     )
                 )
             )
+        slice.append(wrt1st)
+
+        if self.wrt2nd is not None:
+            if isinstance(self.wrt2nd, AsCSTExpression):
+                wrt2nd = cst.SubscriptElement(
+                    cst.Index(self.wrt2nd.as_cst_expression()),
+                )
+            else:
+                wrt2nd = cst.SubscriptElement(
+                    cst.Index(
+                        cst.Attribute(
+                            value=cst.Name("self"),
+                            attr=cst.Name(self.wrt2nd.name),
+                        )
+                    )
+                )
             slice.append(wrt2nd)
 
         return cst.Subscript(value=cst.Name(CmtSolvedARack.name), slice=slice)
@@ -361,7 +371,7 @@ class CmtDADt(Symbol, AsCSTExpression):
                     slice=cst.Index(
                         cst.Attribute(
                             value=cst.Name("self"),
-                            attr=cst.Name(self.name),
+                            attr=cst.Name(self.cmt.name),
                         )
                     ),
                 ),
@@ -373,7 +383,7 @@ class CmtDADtWrt(Symbol, AsCSTExpression):
     __slots__ = ("_cmt", "_wrt", "_wrt2nd")
 
     def __new__(
-        cls, cmt: Compartment, wrt: Symbol | CmtSolvedA, wrt2nd: Symbol | None = None
+        cls, cmt: Compartment, wrt: Symbol, wrt2nd: Symbol | None = None
     ) -> CmtDADtWrt:
         if wrt2nd is not None:
             name = f"∂²dA_{{{cmt.name}}}dt/∂{wrt.name}∂{wrt2nd.name}"
@@ -390,7 +400,7 @@ class CmtDADtWrt(Symbol, AsCSTExpression):
         return self._cmt
 
     @property
-    def wrt(self) -> Symbol | CmtSolvedA:
+    def wrt(self) -> Symbol:
         return self._wrt
 
     @property
@@ -406,30 +416,40 @@ class CmtDADtWrt(Symbol, AsCSTExpression):
                 slice=cst.Index(
                     cst.Attribute(
                         value=cst.Name("self"),
-                        attr=cst.Name(self.name),
+                        attr=cst.Name(self.cmt.name),
                     )
                 ),
             ),
         ]
-        wrt1st = cst.SubscriptElement(
-            cst.Index(
-                cst.Attribute(
-                    value=cst.Name("self"),
-                    attr=cst.Name(self.wrt.name),
-                )
+        if isinstance(self.wrt, AsCSTExpression):
+            wrt1st = cst.SubscriptElement(
+                cst.Index(self.wrt.as_cst_expression()),
             )
-        )
-        slice.append(wrt1st)
-
-        if self.wrt2nd is not None:
-            wrt2nd = cst.SubscriptElement(
+        else:
+            wrt1st = cst.SubscriptElement(
                 cst.Index(
                     cst.Attribute(
                         value=cst.Name("self"),
-                        attr=cst.Name(self.wrt2nd.name),
+                        attr=cst.Name(self.wrt.name),
                     )
                 )
             )
+        slice.append(wrt1st)
+
+        if self.wrt2nd is not None:
+            if isinstance(self.wrt2nd, AsCSTExpression):
+                wrt2nd = cst.SubscriptElement(
+                    cst.Index(self.wrt2nd.as_cst_expression()),
+                )
+            else:
+                wrt2nd = cst.SubscriptElement(
+                    cst.Index(
+                        cst.Attribute(
+                            value=cst.Name("self"),
+                            attr=cst.Name(self.wrt2nd.name),
+                        )
+                    )
+                )
             slice.append(wrt2nd)
 
         return cst.Subscript(value=cst.Name(CmtDADtRack.name), slice=slice)

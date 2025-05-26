@@ -25,7 +25,9 @@ from sympy.parsing.sympy_parser import (
     repeated_decimals,
 )
 
-from symbols._x import XWrt
+from symbols._ns import SymbolDefs
+from symbols._ode import CmtDADt
+from symbols._x import X, XWrt
 from symbols.sympy_parser import parse_sympy_expr
 from syntax.metadata.scope_provider import (
     Scope,
@@ -101,7 +103,7 @@ def auto_symbol(tokens: list[TOKEN], local_dict: DICT, global_dict: DICT):
     return result
 
 
-AutoDiffMap = dict[str, dict[Symbol, Expr]]
+AutoDiffMap = dict[X | CmtDADt, dict[Symbol, Expr]]
 ScopedAutoDiffMap = dict[Scope, AutoDiffMap]
 
 
@@ -121,13 +123,13 @@ class AutoDiffTransformer(cst.CSTTransformer):
         source_code: str,
         locals: dict[str, Any],
         globals: dict[str, Any],
-        symbols: list[Symbol] | None = None,
+        symbol_defs: SymbolDefs | None = None,
         wrt: list[Symbol | tuple[Symbol, Symbol]] | None = None,
     ):
         self._source_code = source_code
         self._locals = locals
         self._globals = globals
-        self._symbols = symbols or []
+        self._symbol_defs = symbol_defs or SymbolDefs()
         self._wrt = wrt or []
 
         self._scoped_auto_diff: ScopedAutoDiffMap = {}
@@ -168,15 +170,15 @@ class AutoDiffTransformer(cst.CSTTransformer):
                     node,
                     source_code=self._source_code,
                 )
-
-            if target.value not in self._scoped_auto_diff[scope]:
-                self._scoped_auto_diff[scope][target.value] = {}
+            x = X(target_name)
+            if x not in self._scoped_auto_diff[scope]:
+                self._scoped_auto_diff[scope][x] = {}
 
             # Evaluate the value of the assignment
             value = node.value
             evaluated_value = self._eval(value, scope=scope)
 
-            if isinstance(evaluated_value, Expr):
+            if isinstance(evaluated_value, Expr) and not evaluated_value.is_constant():
                 for wrt in self._wrt:
                     if isinstance(wrt, tuple):
                         wrt1st, wrt2nd = wrt
@@ -186,9 +188,10 @@ class AutoDiffTransformer(cst.CSTTransformer):
                     first_order_deriv = evaluated_value.diff(wrt)
                     for symbol in evaluated_value.free_symbols:
                         if isinstance(symbol, Symbol) and symbol.name in scope:
+                            xs = X(symbol.name)
                             s_ = (
                                 self._scoped_auto_diff[scope]
-                                .get(symbol.name, {})
+                                .get(xs, {})
                                 .get(wrt1st, None)
                             )
                             parent_scope = scope._next_visible_parent(scope)
@@ -199,7 +202,7 @@ class AutoDiffTransformer(cst.CSTTransformer):
                                     break
                                 s_ = (
                                     self._scoped_auto_diff[parent_scope]
-                                    .get(symbol.name, {})
+                                    .get(xs, {})
                                     .get(wrt1st, None)
                                 )
                                 parent_scope = parent_scope._next_visible_parent(
@@ -211,12 +214,10 @@ class AutoDiffTransformer(cst.CSTTransformer):
                                     s_ = Float(s_)
                                 else:
                                     s_ = XWrt(symbol.name, wrt1st)
-                                first_order_deriv += evaluated_value.diff(symbol) * s_  # pyright: ignore[reportOperatorIssue]
+                                first_order_deriv += evaluated_value.diff(symbol) * s_
                     if wrt2nd is not None:
                         raise NotImplementedError("TODO: handle 2nd order deriv")
-                    self._scoped_auto_diff[scope][target.value][wrt1st] = (
-                        first_order_deriv
-                    )
+                    self._scoped_auto_diff[scope][x][wrt1st] = first_order_deriv
 
         return super().visit_Assign(node)
 
@@ -230,7 +231,7 @@ class AutoDiffTransformer(cst.CSTTransformer):
             if scope is None or scope not in self._scoped_auto_diff:
                 new_body.append(stmt)
                 continue
-            auto_diff_x = self._scoped_auto_diff[scope]
+            diffs_in_scope = self._scoped_auto_diff[scope]
             if isinstance(stmt, cst.SimpleStatementLine):
                 if len(stmt.body) != 1:
                     rethrow(
@@ -249,7 +250,9 @@ class AutoDiffTransformer(cst.CSTTransformer):
                         )
                     target = small_stmt.targets[0].target
                     if isinstance(target, cst.Name):
-                        for symvar, expr in auto_diff_x.get(target.value, {}).items():
+                        for symvar, expr in diffs_in_scope.get(
+                            X(target.value), {}
+                        ).items():
                             assign_ = cst.Assign(
                                 targets=[
                                     cst.AssignTarget(
@@ -272,38 +275,16 @@ class AutoDiffTransformer(cst.CSTTransformer):
                                 )
                             )
             elif isinstance(stmt, cst.If):
-                if_scope = self.get_metadata(ScopeProvider, stmt.body, None)
                 updated_stmt = stmt.with_changes(
                     body=self._leave_Suite(stmt.body),
                 )
 
                 if stmt.orelse:
-                    else_scope = self.get_metadata(ScopeProvider, stmt.orelse, None)
                     updated_stmt = updated_stmt.with_changes(
                         orelse=stmt.orelse.with_changes(
                             body=self._leave_Suite(stmt.orelse.body),
                         )
                     )
-
-                    if if_scope is not None and else_scope is not None:
-                        if_scope_assignment_names = [
-                            ass.name for ass in if_scope.assignments
-                        ]
-                        else_scope_assignment_names = [
-                            ass.name for ass in else_scope.assignments
-                        ]
-
-                        branched_assignment_names = set(
-                            if_scope_assignment_names
-                        ).intersection(else_scope_assignment_names)
-
-                        for branch_assignment_name in branched_assignment_names:
-                            for symbol in self._symbols:
-                                if branch_assignment_name not in auto_diff_x:
-                                    auto_diff_x[branch_assignment_name] = {}
-                                auto_diff_x[branch_assignment_name][symbol] = XWrt(
-                                    branch_assignment_name, wrt=symbol
-                                )
 
                 new_body.append(updated_stmt)
         return suite.with_changes(body=new_body)
@@ -331,10 +312,10 @@ class AutoDiffTransformer(cst.CSTTransformer):
                 )
 
                 for branch_assignment_name in branched_assignment_names:
-                    for symbol in self._symbols:
+                    for symbol in self._symbol_defs.iter_symbols():
                         if branch_assignment_name not in auto_diff_x:
-                            auto_diff_x[branch_assignment_name] = {}
-                        auto_diff_x[branch_assignment_name][symbol] = XWrt(
+                            auto_diff_x[X(branch_assignment_name)] = {}
+                        auto_diff_x[X(branch_assignment_name)][symbol] = XWrt(
                             branch_assignment_name, wrt=symbol
                         )
 
@@ -375,7 +356,7 @@ class AutoDiffTransformer(cst.CSTTransformer):
             )
         if isinstance(parsed, Expr):
             for symbol in parsed.free_symbols:
-                if symbol in self._symbols:
+                if self._symbol_defs.has_symbol(symbol):
                     continue
 
                 if isinstance(symbol, Symbol):
