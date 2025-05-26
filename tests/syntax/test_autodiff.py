@@ -56,7 +56,6 @@ def test_simple_symbols():
             "exp": exp,
         },
         symbol_defs=SymbolDefs([instance.tv, instance.iiv]),
-        wrt=[instance.iiv],
     )
     transformed = _transform(src, transformer)
     print(transformed.code)
@@ -92,7 +91,6 @@ def test_chained_expr():
             "exp": exp,
         },
         symbol_defs=SymbolDefs([instance.tv_v, instance.iiv_cl, instance.iiv_v]),
-        wrt=[instance.iiv_v, instance.iiv_cl],
     )
 
     transformed = _transform(src, transformer)
@@ -135,7 +133,6 @@ def pred(self):
             "exp": exp,
         },
         symbol_defs=SymbolDefs([instance.tv_v, instance.iiv_v]),
-        wrt=[instance.iiv_v],
     )
 
     transformed = _transform(src, transformer)
@@ -143,8 +140,48 @@ def pred(self):
     assert unparse(transformed) == expected.strip()
 
 
-def test_override():
+def test_override1():
     class Override:
+        def __init__(self):
+            self.tv_v = Theta("tv_v")
+            self.iiv_v = Eta("iiv_v")
+
+        def pred(self):
+            v = self.tv_v * exp(self.iiv_v)
+            v = self.tv_v + self.iiv_v
+
+            return v
+
+    expected = """
+def pred(self):
+    v = self.tv_v * exp(self.iiv_v)
+    __X__[v, self.iiv_v] = self.tv_v * exp(self.iiv_v)  # mtran: v wrt iiv_v
+    v = self.tv_v + self.iiv_v
+    __X__[v, self.iiv_v] = 1  # mtran: v wrt iiv_v
+
+    return v
+"""
+
+    src = inspect.getsource(Override.pred).strip()
+    instance = Override()
+    transformer = AutoDiffTransformer(
+        source_code=src,
+        locals={
+            "self": instance,
+        },
+        globals={
+            "exp": exp,
+        },
+        symbol_defs=SymbolDefs([instance.tv_v, instance.iiv_v]),
+    )
+
+    transformed = _transform(src, transformer)
+    # print(unparse(transformed))
+    assert unparse(transformed) == expected.strip()
+
+
+def test_override_in_if():
+    class OverrideInIf:
         def __init__(self):
             self.tv_v = Theta("tv_v")
             self.iiv_v = Eta("iiv_v")
@@ -167,8 +204,8 @@ def pred(self):
     return v
 """
 
-    src = inspect.getsource(Override.pred).strip()
-    instance = Override()
+    src = inspect.getsource(OverrideInIf.pred).strip()
+    instance = OverrideInIf()
     transformer = AutoDiffTransformer(
         source_code=src,
         locals={
@@ -178,9 +215,6 @@ def pred(self):
             "exp": exp,
         },
         symbol_defs=SymbolDefs([instance.tv_v, instance.iiv_v]),
-        wrt=[
-            instance.iiv_v,
-        ],
     )
 
     transformed = _transform(src, transformer)
@@ -225,9 +259,6 @@ def pred(self):
             "exp": exp,
         },
         symbol_defs=SymbolDefs([instance.tv_v, instance.iiv_v]),
-        wrt=[
-            instance.iiv_v,
-        ],
     )
 
     transformed = _transform(src, transformer)

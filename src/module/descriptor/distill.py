@@ -255,7 +255,6 @@ def distill(mod: Module, src: str | None = None) -> ModuleDistillation:
         locals=locals,
         globals=globals,
         symbol_defs=SymbolDefs([*thetas, *etas, *epsilons, *cmts]),
-        wrt=[*etas, cmts[0].A],
     )
     pred_func_def = pred_func_def.apply_transform(autodiff_transformer)
     logger.debug(

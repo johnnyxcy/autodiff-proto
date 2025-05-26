@@ -63,47 +63,24 @@ class XWrt(Symbol, AsCSTExpression):
             ),
         ]
         if isinstance(self.wrt, AsCSTExpression):
-            slice.append(
-                cst.SubscriptElement(
-                    slice=cst.Index(self.wrt.as_cst_expression()),
-                )
-            )
+            expr = self.wrt.as_cst_expression()
         else:
-            slice.append(
-                cst.SubscriptElement(
-                    cst.Index(
-                        cst.Attribute(
-                            value=cst.Name("self"),
-                            attr=cst.Name(self.wrt.name),
-                        )
-                    )
-                )
-            )
+            expr = cst.Name(self.wrt.name)
 
+        slice.append(cst.SubscriptElement(cst.Index(expr)))
         if self.wrt2nd is not None:
             if isinstance(self.wrt2nd, AsCSTExpression):
-                slice.append(
-                    cst.SubscriptElement(
-                        slice=cst.Index(self.wrt2nd.as_cst_expression())
-                    )
-                )
+                expr = self.wrt2nd.as_cst_expression()
+
             else:
                 # self.wrt2nd is a Symbol
-                slice.append(
-                    cst.SubscriptElement(
-                        cst.Index(
-                            cst.Attribute(
-                                value=cst.Name("self"),
-                                attr=cst.Name(self.wrt2nd.name),
-                            )
-                        )
-                    )
-                )
+                expr = cst.Name(self.wrt2nd.name)
+            slice.append(cst.SubscriptElement(cst.Index(expr)))
 
-        return cst.Subscript(value=cst.Name(XWrtRack.name), slice=slice)
+        return cst.Subscript(value=cst.Name(XTransRack.name), slice=slice)
 
 
-class XWrtRack:
+class XTransRack:
     """
     Representing a dummy getter for the derivatives of any arbitrary variable X to be used in MTran.
     """

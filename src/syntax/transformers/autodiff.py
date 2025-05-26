@@ -1,3 +1,4 @@
+from dataclasses import dataclass
 from keyword import iskeyword
 from token import NAME, OP
 from typing import Any
@@ -10,10 +11,10 @@ from libcst.metadata import (
 from sympy import (
     Basic,
     Expr,
-    Float,
     Function,
-    Number,
     Symbol,
+    cse,
+    numbered_symbols,
     parse_expr,
 )
 from sympy.assumptions.ask import AssumptionKeys
@@ -28,6 +29,7 @@ from sympy.parsing.sympy_parser import (
 from symbols._ns import SymbolDefs
 from symbols._ode import CmtDADt
 from symbols._x import X, XWrt
+from symbols._y import Y, YTypeLiteral, YWrt
 from symbols.sympy_parser import parse_sympy_expr
 from syntax.metadata.scope_provider import (
     Scope,
@@ -38,6 +40,35 @@ from syntax.unparse import unparse
 from syntax.with_comment import with_comment
 
 __all__ = ["AutoDiffTransformer"]
+
+
+@dataclass(kw_only=True)
+class FirstOrderDerivativeInfo:
+    """
+    A dataclass to hold information about first order derivatives.
+    """
+
+    expr: Expr
+    wrt: Symbol
+
+
+@dataclass(kw_only=True)
+class XFirstOrderDerivativeInfo(FirstOrderDerivativeInfo):
+    """
+    A dataclass to hold information about first order derivatives.
+    """
+
+    x_name: str
+
+    @property
+    def as_assign_target_expression(self):
+        """
+        Get the assign target for the first order derivative.
+        """
+        return cst.ensure_type(
+            XWrt(self.x_name, self.wrt).as_cst_expression(),
+            cst.BaseAssignTargetExpression,
+        )
 
 
 def auto_symbol(tokens: list[TOKEN], local_dict: DICT, global_dict: DICT):
@@ -124,15 +155,11 @@ class AutoDiffTransformer(cst.CSTTransformer):
         locals: dict[str, Any],
         globals: dict[str, Any],
         symbol_defs: SymbolDefs | None = None,
-        wrt: list[Symbol | tuple[Symbol, Symbol]] | None = None,
     ):
         self._source_code = source_code
         self._locals = locals
         self._globals = globals
         self._symbol_defs = symbol_defs or SymbolDefs()
-        self._wrt = wrt or []
-
-        self._scoped_auto_diff: ScopedAutoDiffMap = {}
 
     def visit_SimpleStatementLine(self, node: cst.SimpleStatementLine):
         if node.trailing_whitespace.comment:
@@ -145,93 +172,215 @@ class AutoDiffTransformer(cst.CSTTransformer):
                 return False
         return super().visit_SimpleStatementLine(node)
 
-    def visit_Assign(self, node: cst.Assign):
-        scope = self.get_metadata(ScopeProvider, node, None)
-        if scope is None:
-            return super().visit_Assign(node)
+    def _do_autodiff_and_cse(
+        self, value: Expr, scope: Scope
+    ) -> tuple[list[cst.BaseStatement], list[tuple[Symbol, Expr]]]:
+        first_order_derivatives: list[tuple[Symbol, Expr]] = []
 
-        if scope not in self._scoped_auto_diff:
-            self._scoped_auto_diff[scope] = {}
+        if isinstance(value, Expr) and not value.is_constant():
+            for wrt in self._symbol_defs.iter_eta():
+                first_order_deriv = value.diff(wrt)
+                for symbol in value.free_symbols:
+                    if isinstance(symbol, Symbol) and symbol.name in scope:
+                        first_order_deriv += value.diff(symbol) * XWrt(symbol.name, wrt)
+                first_order_derivatives.append((wrt, first_order_deriv))
 
-        targets = node.targets
+        replacements, reductions = cse(
+            exprs=[expr for _, expr in first_order_derivatives],
+            symbols=numbered_symbols(prefix="__"),
+            list=True,
+        )
+        if not isinstance(reductions, list):
+            raise NotImplementedError()
+        sub_expr_term: Symbol
+        sub_expr: Expr
+        replacement_assignments: list[cst.BaseStatement] = []
+        for sub_expr_term, sub_expr in replacements:
+            replacement_assignments.append(
+                cst.SimpleStatementLine(
+                    body=[
+                        cst.Assign(
+                            targets=[
+                                cst.AssignTarget(target=cst.Name(sub_expr_term.name))
+                            ],
+                            value=parse_sympy_expr(sub_expr),
+                        )
+                    ]
+                )
+            )
+
+        for i, reduced_expr in enumerate(reductions):
+            first_order_derivatives[i] = (first_order_derivatives[i][0], reduced_expr)
+
+        return replacement_assignments, first_order_derivatives
+
+    def _autodiff_transform_assign(
+        self, assign: cst.Assign, scope: Scope
+    ) -> list[cst.BaseStatement]:
+        """
+        Handle the assignment node for automatic differentiation.
+        This method is called when an assignment is encountered.
+        """
+        targets = assign.targets
         if len(targets) != 1:
             rethrow(
                 SyntaxError("Only single assignment is supported"),
-                node,
+                assign,
                 source_code=self._source_code,
             )
         target = targets[0].target
-        # handle name assignment
-        if isinstance(target, cst.Name):
-            target_name = target.value
-            if target_name not in scope:
-                rethrow(
-                    NameError(f"Variable '{target_name}' is not defined"),
-                    node,
-                    source_code=self._source_code,
+        # Evaluate the value of the assignment
+        value = assign.value
+        evaluated_value = self._eval(value, scope=scope)
+
+        first_order_body: list[cst.BaseStatement] = []
+        if isinstance(evaluated_value, Expr) and not evaluated_value.is_constant():
+            if isinstance(target, cst.Name):
+                replacement_assignments, derivatives = self._do_autodiff_and_cse(
+                    value=evaluated_value, scope=scope
                 )
-            x = X(target_name)
-            if x not in self._scoped_auto_diff[scope]:
-                self._scoped_auto_diff[scope][x] = {}
+                first_order_body.extend(replacement_assignments)
+                for wrt, expr in derivatives:
+                    first_order_body.append(
+                        with_comment(
+                            cst.SimpleStatementLine(
+                                body=[
+                                    cst.Assign(
+                                        targets=[
+                                            cst.AssignTarget(
+                                                target=cst.ensure_type(
+                                                    XWrt(
+                                                        target.value, wrt
+                                                    ).as_cst_expression(),
+                                                    cst.BaseAssignTargetExpression,
+                                                )
+                                            )
+                                        ],
+                                        value=parse_sympy_expr(expr),
+                                    )
+                                ],
+                            ),
+                            comment=f"# mtran: {target.value} wrt {wrt.name}",
+                        )
+                    )
 
-            # Evaluate the value of the assignment
-            value = node.value
-            evaluated_value = self._eval(value, scope=scope)
+        transformed: list[cst.BaseStatement] = []
+        if len(first_order_body) > 0:
+            transformed.append(
+                cst.If(
+                    test=cst.Name("__FIRST_ORDER"),
+                    body=cst.IndentedBlock(body=first_order_body),
+                )
+            )
+        return transformed
 
-            if isinstance(evaluated_value, Expr) and not evaluated_value.is_constant():
-                for wrt in self._wrt:
-                    if isinstance(wrt, tuple):
-                        wrt1st, wrt2nd = wrt
-                    else:
-                        wrt1st = wrt
-                        wrt2nd = None
-                    first_order_deriv = evaluated_value.diff(wrt)
-                    for symbol in evaluated_value.free_symbols:
-                        if isinstance(symbol, Symbol) and symbol.name in scope:
-                            xs = X(symbol.name)
-                            s_ = (
-                                self._scoped_auto_diff[scope]
-                                .get(xs, {})
-                                .get(wrt1st, None)
-                            )
-                            parent_scope = scope._next_visible_parent(scope)
-                            while s_ is None:  # look for parent scopes
-                                if (
-                                    parent_scope is scope.globals
-                                ):  # If we reach the top-level global scope, break
-                                    break
-                                s_ = (
-                                    self._scoped_auto_diff[parent_scope]
-                                    .get(xs, {})
-                                    .get(wrt1st, None)
+    def _autodiff_transform_return(
+        self, return_: cst.Return, scope: Scope
+    ) -> list[cst.BaseStatement]:
+        """
+        Handle the return node for automatic differentiation.
+        This method is called when a return statement is encountered.
+        """
+        value = return_.value
+        if value is None:
+            rethrow(
+                SyntaxError(
+                    "Return statement must return an expression. For example, use `return IPRED` instead of `return`"
+                ),
+                return_,
+                source_code=self._source_code,
+            )
+        evaluated_value = self._eval(value, scope=scope)
+        transformed: list[cst.BaseStatement] = []
+        y_type: YTypeLiteral = "prediction"
+        if isinstance(evaluated_value, Y):
+            y_type = evaluated_value.type
+
+        transformed.append(
+            cst.SimpleStatementLine(
+                body=[
+                    cst.Assign(
+                        targets=[
+                            cst.AssignTarget(target=Y(y_type).as_cst_expression())
+                        ],
+                        value=parse_sympy_expr(evaluated_value),
+                    )
+                ]
+            )
+        )
+
+        first_order_body: list[cst.BaseStatement] = []
+        if isinstance(evaluated_value, Expr) and not evaluated_value.is_constant():
+            replacement_assignments, derivatives = self._do_autodiff_and_cse(
+                value=evaluated_value, scope=scope
+            )
+            first_order_body.extend(replacement_assignments)
+            for wrt, expr in derivatives:
+                first_order_body.append(
+                    with_comment(
+                        cst.SimpleStatementLine(
+                            body=[
+                                cst.Assign(
+                                    targets=[
+                                        cst.AssignTarget(
+                                            target=cst.ensure_type(
+                                                YWrt(wrt).as_cst_expression(),
+                                                cst.BaseAssignTargetExpression,
+                                            )
+                                        )
+                                    ],
+                                    value=parse_sympy_expr(expr),
                                 )
-                                parent_scope = parent_scope._next_visible_parent(
-                                    parent_scope
-                                )
+                            ],
+                        ),
+                        comment=f"# mtran: __Y__ wrt {wrt.name}",
+                    )
+                )
 
-                            if s_ is not None:
-                                if isinstance(s_, Number):
-                                    s_ = Float(s_)
-                                else:
-                                    s_ = XWrt(symbol.name, wrt1st)
-                                first_order_deriv += evaluated_value.diff(symbol) * s_
-                    if wrt2nd is not None:
-                        raise NotImplementedError("TODO: handle 2nd order deriv")
-                    self._scoped_auto_diff[scope][x][wrt1st] = first_order_deriv
+        if len(first_order_body) > 0:
+            transformed.append(
+                cst.If(
+                    test=cst.Name("__FIRST_ORDER"),
+                    body=cst.IndentedBlock(body=first_order_body),
+                )
+            )
+        transformed.append(cst.SimpleStatementLine(body=[cst.Return()]))
+        return transformed
 
-        return super().visit_Assign(node)
+    def _autodiff_transform_If(
+        self, if_: cst.If, scope: Scope
+    ) -> list[cst.BaseStatement]:
+        """
+        Handle the if statement for automatic differentiation.
+        This method is called when an if statement is encountered.
+        """
+        transformed: list[cst.BaseStatement] = []
+        updated_stmt = if_.with_changes(
+            body=self._transform_Suite(if_.body),
+        )
 
-    def _leave_Suite(self, suite: cst.BaseSuite) -> cst.BaseSuite:
+        if if_.orelse:
+            updated_stmt = updated_stmt.with_changes(
+                orelse=if_.orelse.with_changes(
+                    body=self._transform_Suite(if_.orelse.body),
+                )
+            )
+            transformed.append(updated_stmt)
+        else:
+            transformed.append(updated_stmt)
+
+        return transformed
+
+    def _transform_Suite(self, suite: cst.BaseSuite) -> cst.BaseSuite:
         """
         Leave a suite node and return the updated node.
         """
         new_body: list[cst.BaseStatement] = []
         for stmt in cst.ensure_type(suite, cst.IndentedBlock).body:
             scope = self.get_metadata(ScopeProvider, stmt, None)
-            if scope is None or scope not in self._scoped_auto_diff:
+            if scope is None:
                 new_body.append(stmt)
                 continue
-            diffs_in_scope = self._scoped_auto_diff[scope]
             if isinstance(stmt, cst.SimpleStatementLine):
                 if len(stmt.body) != 1:
                     rethrow(
@@ -240,89 +389,31 @@ class AutoDiffTransformer(cst.CSTTransformer):
                         source_code=self._source_code,
                     )
                 small_stmt = stmt.body[0]
-                new_body.append(stmt)
                 if isinstance(small_stmt, cst.Assign):
-                    if len(small_stmt.targets) != 1:
-                        rethrow(
-                            SyntaxError("Only single assignment is supported"),
-                            small_stmt,
-                            source_code=self._source_code,
-                        )
-                    target = small_stmt.targets[0].target
-                    if isinstance(target, cst.Name):
-                        for symvar, expr in diffs_in_scope.get(
-                            X(target.value), {}
-                        ).items():
-                            assign_ = cst.Assign(
-                                targets=[
-                                    cst.AssignTarget(
-                                        target=cst.ensure_type(
-                                            XWrt(
-                                                target.value, symvar
-                                            ).as_cst_expression(),
-                                            cst.BaseAssignTargetExpression,
-                                        )
-                                    )
-                                ],
-                                value=parse_sympy_expr(expr=expr),
-                            )
-                            new_body.append(
-                                with_comment(
-                                    cst.SimpleStatementLine(
-                                        body=[assign_],
-                                    ),
-                                    comment=f"# mtran: {target.value} wrt {symvar.name}",
-                                )
-                            )
-            elif isinstance(stmt, cst.If):
-                updated_stmt = stmt.with_changes(
-                    body=self._leave_Suite(stmt.body),
-                )
-
-                if stmt.orelse:
-                    updated_stmt = updated_stmt.with_changes(
-                        orelse=stmt.orelse.with_changes(
-                            body=self._leave_Suite(stmt.orelse.body),
-                        )
+                    new_body.append(stmt)
+                    new_body.extend(
+                        self._autodiff_transform_assign(small_stmt, scope=scope)
                     )
-
-                new_body.append(updated_stmt)
+                elif isinstance(small_stmt, cst.Return):
+                    new_body.extend(
+                        self._autodiff_transform_return(small_stmt, scope=scope)
+                    )
+                else:
+                    rethrow(
+                        NotImplementedError(
+                            f'Cannot handle "{type(small_stmt).__name__}" statement yet'
+                        ),
+                        stmt,
+                        source_code=self._source_code,
+                    )
+            elif isinstance(stmt, cst.If):
+                new_body.extend(self._autodiff_transform_If(stmt, scope))
         return suite.with_changes(body=new_body)
-
-    def visit_If(self, node: cst.If):
-        parent_scope = self.get_metadata(ScopeProvider, node, None)
-        if parent_scope is None:
-            return super().visit_If(node)
-        if parent_scope not in self._scoped_auto_diff:
-            self._scoped_auto_diff[parent_scope] = {}
-        auto_diff_x = self._scoped_auto_diff[parent_scope]
-        if_scope = self.get_metadata(ScopeProvider, node.body, None)
-
-        if node.orelse:
-            else_scope = self.get_metadata(ScopeProvider, node.orelse, None)
-
-            if if_scope is not None and else_scope is not None:
-                if_scope_assignment_names = [ass.name for ass in if_scope.assignments]
-                else_scope_assignment_names = [
-                    ass.name for ass in else_scope.assignments
-                ]
-
-                branched_assignment_names = set(if_scope_assignment_names).intersection(
-                    else_scope_assignment_names
-                )
-
-                for branch_assignment_name in branched_assignment_names:
-                    for symbol in self._symbol_defs.iter_symbols():
-                        if branch_assignment_name not in auto_diff_x:
-                            auto_diff_x[X(branch_assignment_name)] = {}
-                        auto_diff_x[X(branch_assignment_name)][symbol] = XWrt(
-                            branch_assignment_name, wrt=symbol
-                        )
 
     def leave_FunctionDef(
         self, original_node: cst.FunctionDef, updated_node: cst.FunctionDef
     ):
-        return updated_node.with_changes(body=self._leave_Suite(original_node.body))
+        return updated_node.with_changes(body=self._transform_Suite(original_node.body))
 
     def _eval(self, token: cst.CSTNode, scope: Scope) -> Any:
         """

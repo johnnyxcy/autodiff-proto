@@ -6,7 +6,7 @@ from uuid import uuid4
 import libcst as cst
 from sympy import Expr, Number, Symbol
 
-from symbols._args import ParamArg, ParamArgWrt, ParamsArgRack
+from symbols._args import ParamArg, ParamArgWrt, ParamsArgTransRack
 from typings import AsCSTExpression, Expression, ValueType
 
 
@@ -365,7 +365,7 @@ class CmtDADt(Symbol, AsCSTExpression):
         """
 
         return cst.Subscript(
-            value=cst.Name(CmtDADtRack.name),
+            value=cst.Name(CmtDADtTransRack.name),
             slice=[
                 cst.SubscriptElement(
                     slice=cst.Index(
@@ -452,10 +452,10 @@ class CmtDADtWrt(Symbol, AsCSTExpression):
                 )
             slice.append(wrt2nd)
 
-        return cst.Subscript(value=cst.Name(CmtDADtRack.name), slice=slice)
+        return cst.Subscript(value=cst.Name(CmtDADtTransRack.name), slice=slice)
 
 
-class CmtDADtRack:
+class CmtDADtTransRack:
     """
     Representing a dummy getter for the dAdt and corresponding derivatives of any arbitrary compartment to be used in MTran.
     """
@@ -503,7 +503,7 @@ class CmtParamArg(ParamArg):
 
     def as_cst_expression(self) -> cst.BaseExpression:
         return cst.Subscript(
-            value=cst.Name(ParamsArgRack.name),
+            value=cst.Name(ParamsArgTransRack.name),
             slice=self._as_cst_slices(),
         )
 
@@ -525,7 +525,7 @@ class CmtParamArgWrt(ParamArgWrt):
 
     def as_cst_expression(self) -> cst.BaseExpression:
         return cst.Subscript(
-            value=cst.Name(ParamsArgRack.name),
+            value=cst.Name(ParamsArgTransRack.name),
             slice=self._as_cst_slices(),
         )
 
@@ -869,7 +869,7 @@ class Compartment:
     def __getitem__(
         self, __key: str | tuple[str, Symbol] | tuple[str, Symbol, Symbol]
     ) -> ParamArg | ParamArgWrt:
-        return ParamsArgRack(
+        return ParamsArgTransRack(
             cls_param_arg=CmtParamArg,
             cls_param_arg_wrt=CmtParamArgWrt,
         )[__key]
