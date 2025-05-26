@@ -19,6 +19,7 @@ from symbols._theta import Theta
 from syntax.transformers.autodiff import AutoDiffTransformer
 from syntax.transformers.inline_func_transpile import InlineFunctionTranspiler
 from syntax.unparse import unparse
+from syntax.visitor.no_private import NoPrivateVisitor
 from utils.find_global import find_global_context
 from utils.inspect_hack import inspect
 from utils.loggings import logger
@@ -88,7 +89,6 @@ def distill(mod: Module, src: str | None = None) -> ModuleDistillation:
 
     pred_func_def: CSTAndSrc[cst.FunctionDef] | None = None
     try:
-        # 用 inspect 获取函数体
         pred_func_src = inspect.getsource(mod.pred)
         pred_func_def = CSTAndSrc(
             src=pred_func_src,
@@ -97,7 +97,7 @@ def distill(mod: Module, src: str | None = None) -> ModuleDistillation:
             ),
         )
     except Exception as _:
-        # 如果没有找到, 那么就从 module_cls_def 中获取
+        # If inspect fails, try to find the pred function in the module class definition
         for stmt in module_cls_def.cst.body.body:
             if isinstance(stmt, cst.FunctionDef) and stmt.name.value == "pred":
                 pred_func_def = CSTAndSrc(src=unparse(stmt).strip(), cst=stmt)
@@ -108,7 +108,7 @@ def distill(mod: Module, src: str | None = None) -> ModuleDistillation:
             "Please ensure that the `pred` function is defined in the module."
         )
     visited: set[str] = set()
-    # 重要: 这里必须先用 vars(mod) 获取所有的实例属性, 否则会导致排序错误, dir(mod) 是无序的
+    # Important: must use vars(mod) to get all instance attributes first, otherwise it will cause sorting errors, dir(mod) is unordered
     attr_names = [*vars(mod).keys(), *dir(mod)]
 
     thetas: list[Theta] = []
@@ -120,7 +120,7 @@ def distill(mod: Module, src: str | None = None) -> ModuleDistillation:
     sharedvars: list[SharedVar] = []
 
     for attr_name in attr_names:
-        if re.match(r"__(.+)__", attr_name):  # 跳过 dunder 方法
+        if re.match(r"__(.+)__", attr_name):  # skip dunder methods and attributes
             continue
         attr = getattr(mod, attr_name)
         if attr_name in visited:
@@ -149,7 +149,7 @@ def distill(mod: Module, src: str | None = None) -> ModuleDistillation:
         visited.add(attr_name)
     logger.debug("[MTran::interpret] Attributes found: %s", visited)
 
-    # 检查 column_context 和 column_collection_context 的 col_name 是否有重复
+    # Check for duplicate column names
     visited_colnames: set[str] = set()
     for v in colvars:
         if v.col_name in visited_colnames:
@@ -215,7 +215,7 @@ def distill(mod: Module, src: str | None = None) -> ModuleDistillation:
         advan = 0
         trans = 0
     else:
-        # 非 Ode Module 的话, 不能定义 compartment
+        # If the module is not derived from OdeModule, no compartments can be defined.
         if len(cmts) > 0:
             raise AssertionError(
                 "Your module must be derived from OdeModule if any compartment is defined"
@@ -232,8 +232,11 @@ def distill(mod: Module, src: str | None = None) -> ModuleDistillation:
         "__self__": mod,
         "__class__": mod.__class__,
     }
+    # Check 1: No Private Variables
+    visitor = NoPrivateVisitor(source_code=src)
+    cst.parse_module(src).visit(visitor)
 
-    # Transform 1: 自定义函数展开
+    # Transform 1: Inline Function Transpile
     logger.debug("[MTran::distill] Start inline function transpile")
     transpiler = InlineFunctionTranspiler(
         source_code=src,
