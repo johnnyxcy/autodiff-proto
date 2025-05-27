@@ -5,6 +5,7 @@ from _collections_abc import dict_items, dict_keys, dict_values
 
 import libcst as cst
 from sympy import Symbol
+from typing_extensions import Self
 
 from typings import CodeGen
 
@@ -17,17 +18,26 @@ def is_numeric_dtype(dtype: ColumnDtype) -> bool:
     return dtype == "numeric" or dtype in [int, float]
 
 
-class ColVar(CodeGen):
+class ColVar(Symbol, CodeGen):
     """Column variable."""
 
-    name: str
-    """str: Variable Name.
-    """
+    __slots__ = ("_col_name",)
+
+    def __new__(cls, name: str, col_name: str, **kwargs: typing.Any):
+        instance = super().__new__(cls, name, **kwargs)  # type: ignore
+        instance._col_name = col_name
+        return instance
+
+    def __deepcopy__(self, memo: typing.Any) -> Self:
+        ins = type(self)(name=self.name, col_name=self.col_name)
+        # 此处更名是因为 Symbol 重新复制并不会生成新的对象，而是用原始对象，
+        # 原始对象如果更名了就导致拷贝后的对象和原始对象 name 不一致
+        ins.name = self.name
+        return ins
 
     @property
     def col_name(self) -> str:
-        """str: Name of the column represented by this variable."""
-        ...
+        return self._col_name
 
     @property
     def dtype(self) -> ColumnDtypeLiteral:
@@ -111,42 +121,7 @@ class ColVarCollection(typing.Generic[T]):
 NumericColVarT = typing.TypeVar("NumericColVarT", bound="NumericColVar")
 
 
-class NumericColVar(Symbol, ColVar):
-    __slots__ = ("_col_name",)
-
-    def __new__(
-        cls: typing.Type[NumericColVarT], name: str, col_name: str, **kwargs: typing.Any
-    ) -> NumericColVarT:
-        """Initialization a DataIndexer.
-
-        Parameters
-        ----------
-        name : str
-            Variable name.
-        col_name : str
-            Name of the column in dataset.
-        dtype : ColumnDtype
-            Numeric variable or text variable.
-
-        Returns:
-        ColumnIndexer
-            Column variable.
-        """
-        instance = super().__new__(cls, name, **kwargs)  # type: ignore
-        instance._col_name = col_name
-        return instance
-
-    def __deepcopy__(self: NumericColVarT, memo: typing.Any) -> NumericColVarT:
-        ins = type(self)(name=self.name, col_name=self.col_name)
-        # 此处更名是因为 Symbol 重新复制并不会生成新的对象，而是用原始对象，
-        # 原始对象如果更名了就导致拷贝后的对象和原始对象 name 不一致
-        ins.name = self.name
-        return ins
-
-    @property
-    def col_name(self) -> str:
-        return self._col_name
-
+class NumericColVar(ColVar):
     @property
     def dtype(self) -> typing.Literal["numeric"]:
         return "numeric"
@@ -173,58 +148,18 @@ StrCategoricalColVarT = typing.TypeVar(
 )
 
 
-class StrCategoricalColVar(Symbol, ColVar):
+class StrColVar(ColVar):
+    @property
+    def dtype(self) -> typing.Literal["str"]:
+        return "str"
+
+
+class StrCategoricalColVar(StrColVar):
     """Variable represents a column that contains string data."""
-
-    __slots__ = ("_col_name",)
-
-    def __new__(
-        cls: typing.Type[StrCategoricalColVarT],
-        name: str,
-        col_name: str,
-        **kwargs: typing.Any,
-    ) -> StrCategoricalColVarT:
-        """Initialization a DataIndexer.
-
-        Parameters
-        ----------
-        name : str
-            Variable name.
-        col_name : str
-            Name of the column in dataset.
-        dtype : ColumnDtype
-            Numeric variable or text variable.
-
-        Returns:
-        ColumnIndexer
-            Column variable.
-        """
-        instance = super().__new__(cls, name, **kwargs)  # type: ignore
-        instance._col_name = col_name
-        return instance
-
-    # def __init__(self, name: str, col_name: str) -> None:
-    #     self.name = name
-    #     self._col_name = col_name
-
-    def __deepcopy__(
-        self: StrCategoricalColVarT, memo: typing.Any
-    ) -> StrCategoricalColVarT:
-        ins = type(self)(name=self.name, col_name=self.col_name)
-        ins.name = self.name
-        return ins
 
     @property
     def is_categorical(self) -> typing.Literal[True]:
         return True
-
-    @property
-    def col_name(self) -> str:
-        return self._col_name
-
-    @property
-    def dtype(self) -> typing.Literal["str"]:
-        return "str"
 
 
 NumericCategoricalColVarCollection = ColVarCollection[NumericCategoricalColVar]

@@ -1,6 +1,6 @@
 import inspect
 from dataclasses import dataclass
-from typing import Any, Protocol, Sequence
+from typing import Any, Callable, Protocol, Sequence, TypeVar
 
 import libcst as cst
 from libcst.metadata import (
@@ -15,6 +15,32 @@ from sympy.core.function import FunctionClass
 from syntax.eval import eval_token
 
 __all__ = ["InlineFunctionTranspiler"]
+
+CallableT = TypeVar("CallableT", bound=Callable)
+
+
+def do_not_inline_transpile(func: CallableT) -> CallableT:
+    """
+    A decorator to mark a function for inline transpilation.
+
+    This decorator can be used to mark functions that should be inlined
+    during the transpilation process. It does not modify the function itself.
+    """
+    setattr(func, "_do_not_inline_transpile", True)
+    return func
+
+
+def is_do_not_inline_transpile(func: Callable) -> bool:
+    """
+    Check if a function is marked for inline transpilation.
+
+    Args:
+        func (CallableT): The function to check.
+
+    Returns:
+        bool: True if the function is marked for inline transpilation, False otherwise.
+    """
+    return getattr(func, "_do_not_inline_transpile", False)
 
 
 class Mangler(Protocol):
@@ -50,9 +76,9 @@ class LocalVariableMangler(cst.CSTTransformer):
         ExpressionContextProvider,
     )
 
-    def __init__(self, Mangler: Mangler):
+    def __init__(self, mangler: Mangler):
         super().__init__()
-        self._mangler = Mangler
+        self._mangler = mangler
         self._names: list[str] = []
 
     def visit_Name(self, node: cst.Name):
@@ -155,6 +181,10 @@ class InlineFunctionTranspiler(cst.CSTTransformer):
             source_code=self._source_code,
         )
 
+        if is_do_not_inline_transpile(func_):
+            # If the function is marked as do not inline, return None
+            return None
+
         if isinstance(func_, FunctionClass):
             # If the function is a SymPy FunctionClass, we can use its name directly
             func_name = func_.__name__
@@ -204,9 +234,9 @@ class InlineFunctionTranspiler(cst.CSTTransformer):
                 s += f"__{count}"
             return s
 
-        Mangler = LocalVariableMangler(Mangler=rename_)
+        mangler = LocalVariableMangler(mangler=rename_)
         wrapped = MetadataWrapper(cst.Module(body=[func_def]))
-        renamed = wrapped.visit(Mangler)
+        renamed = wrapped.visit(mangler)
         func_def = cst.ensure_type(
             cst.ensure_type(renamed, cst.Module).body[0],
             cst.FunctionDef,
@@ -283,26 +313,68 @@ class InlineFunctionTranspiler(cst.CSTTransformer):
         replacement.body = stmts
         return replacement
 
+    def _transform_Suite(
+        self, original_suite: cst.BaseSuite, updated_suite: cst.BaseSuite
+    ) -> cst.BaseSuite:
+        """
+        Transform a suite of statements by inlining function calls.
+
+        This method is used to transform a suite of statements by inlining function calls
+        that have been marked for inlining. It replaces the original function call with the
+        inlined nodes.
+        """
+        new_body: list[cst.BaseStatement] = []
+        original_block = cst.ensure_type(original_suite, cst.IndentedBlock)
+        updated_block = cst.ensure_type(updated_suite, cst.IndentedBlock)
+        if len(original_block.body) != len(updated_block.body):
+            # If the original and updated body lengths are different,
+            # we cannot inline the function call, so return the updated suite
+            return updated_suite
+        for idx, stmt in enumerate(original_block.body):
+            updated_stmt = cst.ensure_type(updated_block.body[idx], cst.BaseStatement)
+            if isinstance(stmt, cst.SimpleStatementLine):
+                for (
+                    _,
+                    stmt_to_replace,
+                ), replacement in self._inline_replace_map.items():
+                    if stmt_to_replace == stmt:
+                        # Replace the statement with the inlined nodes
+                        new_body.extend(replacement.body)
+                        # We CANNOT break here
+                        # because there may be multiple inlined nodes with in the statement
+                new_body.append(updated_stmt)
+            elif isinstance(stmt, cst.BaseCompoundStatement) and isinstance(
+                updated_stmt, cst.BaseCompoundStatement
+            ):
+                updated_stmt = updated_stmt.with_changes(
+                    body=self._transform_Suite(
+                        original_suite=stmt.body,
+                        updated_suite=updated_stmt.body,
+                    ),
+                )
+                if isinstance(stmt, cst.If) and isinstance(updated_stmt, cst.If):
+                    if stmt.orelse is not None and updated_stmt.orelse is not None:
+                        updated_stmt = updated_stmt.with_changes(
+                            orelse=updated_stmt.orelse.with_changes(
+                                body=self._transform_Suite(
+                                    original_suite=stmt.orelse.body,
+                                    updated_suite=updated_stmt.orelse.body,
+                                )
+                            )
+                        )
+                new_body.append(updated_stmt)
+
+        return updated_suite.with_changes(body=new_body)
+
     def leave_FunctionDef(
         self, original_node: cst.FunctionDef, updated_node: cst.FunctionDef
     ):
-        body: list[cst.BaseStatement] = []
-        func_body = cst.ensure_type(original_node.body, cst.IndentedBlock)
-        if len(func_body.body) != len(updated_node.body.body):
-            # Function body should not be modified yet.
-            # Only Function call replacement should be done.
-            # If the function body is modified, we cannot inline the function call
-            # and we need to return the updated node.
-            return updated_node
-        for idx, stmt in enumerate(func_body.body):
-            for (_, stmt_to_replace), replacement in self._inline_replace_map.items():
-                if stmt_to_replace == stmt:
-                    # Replace the statement with the inlined nodes
-                    body.extend(replacement.body)
-                    # We CANNOT break here
-                    # because there may be multiple inlined nodes with in the statement
-            body.append(cst.ensure_type(updated_node.body.body[idx], cst.BaseStatement))
-        return updated_node.with_changes(body=func_body.with_changes(body=body))
+        return updated_node.with_changes(
+            body=self._transform_Suite(
+                original_suite=original_node.body,
+                updated_suite=updated_node.body,
+            )
+        )
 
     def visit_Call(self, node: cst.Call):
         parent = self.get_metadata(ParentNodeProvider, node, None)

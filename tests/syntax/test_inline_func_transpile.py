@@ -163,3 +163,35 @@ def test_multiple_transpilation():
         .code
     )
     assert updated_code == expected_code
+
+
+def test_if_else():
+    source_code = """def demo_func(a, b, c):
+    if a > 0:
+        return add(a, b)
+    else:
+        return add(b, c)
+"""
+
+    expected_code = """def demo_func(a, b, c):
+    if a > 0:
+        __add__a = a
+        __add__b = b
+        __add__return = __add__a + __add__b
+        return __add__return
+    else:
+        __add__a__1 = b
+        __add__b__1 = c
+        __add__return__1 = __add__a__1 + __add__b__1
+        return __add__return__1
+"""
+
+    transpiler = InlineFunctionTranspiler(source_code, locals(), globals())
+    updated_code = (
+        cst.MetadataWrapper(
+            cst.parse_module(source_code),
+        )
+        .visit(transpiler)
+        .code
+    )
+    assert updated_code == expected_code

@@ -10,12 +10,13 @@ import libcst as cst
 from module.defs.module import Module
 from module.defs.ode import OdeModule
 from symbols._column import AnyColVar, ColVar, ColVarCollection
-from symbols._ns import SymbolDefs
+from symbols._ns import SymbolNamespace
 from symbols._ode import Compartment
 from symbols._omega_eta import Eta
 from symbols._sharedvar import SharedVar
 from symbols._sigma_eps import Eps
 from symbols._theta import Theta
+from symbols._y import likelihood, prediction
 from syntax.transformers.autodiff import AutoDiffTransformer
 from syntax.transformers.inline_func_transpile import InlineFunctionTranspiler
 from syntax.unparse import unparse
@@ -231,6 +232,8 @@ def distill(mod: Module, src: str | None = None) -> ModuleDistillation:
         "self": mod,
         "__self__": mod,
         "__class__": mod.__class__,
+        "prediction": prediction,
+        "likelihood": likelihood,
     }
     # Check 1: No Private Variables
     visitor = NoPrivateVisitor(source_code=src)
@@ -257,7 +260,8 @@ def distill(mod: Module, src: str | None = None) -> ModuleDistillation:
         source_code=pred_func_def.src,
         locals=locals,
         globals=globals,
-        symbol_defs=SymbolDefs([*thetas, *etas, *epsilons, *cmts]),
+        symbol_defs=SymbolNamespace([*thetas, *etas, *epsilons, *cmts, *colvars]),
+        module_cls=mod.__class__,
     )
     pred_func_def = pred_func_def.apply_transform(autodiff_transformer)
     logger.debug(

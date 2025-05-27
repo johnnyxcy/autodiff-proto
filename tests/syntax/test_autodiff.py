@@ -4,7 +4,7 @@ import libcst as cst
 import pytest
 from sympy import exp
 
-from symbols._ns import SymbolDefs
+from symbols._ns import SymbolNamespace
 from symbols._omega_eta import Eta
 from symbols._theta import Theta
 from syntax.rethrow import MTranError
@@ -55,7 +55,7 @@ def test_simple_symbols():
         globals={
             "exp": exp,
         },
-        symbol_defs=SymbolDefs([instance.tv, instance.iiv]),
+        symbol_defs=SymbolNamespace([instance.tv, instance.iiv]),
     )
     transformed = _transform(src, transformer)
     print(transformed.code)
@@ -90,7 +90,7 @@ def test_chained_expr():
         globals={
             "exp": exp,
         },
-        symbol_defs=SymbolDefs([instance.tv_v, instance.iiv_cl, instance.iiv_v]),
+        symbol_defs=SymbolNamespace([instance.tv_v, instance.iiv_cl, instance.iiv_v]),
     )
 
     transformed = _transform(src, transformer)
@@ -115,12 +115,16 @@ def test_if_else():
 def pred(self):
     if self.tv_v > 0:
         v = self.tv_v * exp(self.iiv_v)
-        __X__[v, self.iiv_v] = self.tv_v * exp(self.iiv_v)  # mtran: v wrt iiv_v
+        if __FIRST_ORDER:
+            __X__[v, self.iiv_v] = self.tv_v * exp(self.iiv_v)  # mtran: v wrt iiv_v
     else:
         v = self.tv_v + self.iiv_v
-        __X__[v, self.iiv_v] = 1  # mtran: v wrt iiv_v
-
-    return v
+        if __FIRST_ORDER:
+            __X__[v, self.iiv_v] = 1  # mtran: v wrt iiv_v
+    __Y__["prediction"] = v
+    if __FIRST_ORDER:
+        __Y__[self.iiv_v] = __X__[v, self.iiv_v]  # mtran: __Y__ wrt iiv_v
+    return
 """
     src = inspect.getsource(IfElse.pred).strip()
     instance = IfElse()
@@ -132,7 +136,7 @@ def pred(self):
         globals={
             "exp": exp,
         },
-        symbol_defs=SymbolDefs([instance.tv_v, instance.iiv_v]),
+        symbol_defs=SymbolNamespace([instance.tv_v, instance.iiv_v]),
     )
 
     transformed = _transform(src, transformer)
@@ -155,11 +159,15 @@ def test_override1():
     expected = """
 def pred(self):
     v = self.tv_v * exp(self.iiv_v)
-    __X__[v, self.iiv_v] = self.tv_v * exp(self.iiv_v)  # mtran: v wrt iiv_v
+    if __FIRST_ORDER:
+        __X__[v, self.iiv_v] = self.tv_v * exp(self.iiv_v)  # mtran: v wrt iiv_v
     v = self.tv_v + self.iiv_v
-    __X__[v, self.iiv_v] = 1  # mtran: v wrt iiv_v
-
-    return v
+    if __FIRST_ORDER:
+        __X__[v, self.iiv_v] = 1  # mtran: v wrt iiv_v
+    __Y__["prediction"] = v
+    if __FIRST_ORDER:
+        __Y__[self.iiv_v] = __X__[v, self.iiv_v]  # mtran: __Y__ wrt iiv_v
+    return
 """
 
     src = inspect.getsource(Override.pred).strip()
@@ -172,7 +180,7 @@ def pred(self):
         globals={
             "exp": exp,
         },
-        symbol_defs=SymbolDefs([instance.tv_v, instance.iiv_v]),
+        symbol_defs=SymbolNamespace([instance.tv_v, instance.iiv_v]),
     )
 
     transformed = _transform(src, transformer)
@@ -196,12 +204,16 @@ def test_override_in_if():
     expected = """
 def pred(self):
     v = self.tv_v * exp(self.iiv_v)
-    __X__[v, self.iiv_v] = self.tv_v * exp(self.iiv_v)  # mtran: v wrt iiv_v
+    if __FIRST_ORDER:
+        __X__[v, self.iiv_v] = self.tv_v * exp(self.iiv_v)  # mtran: v wrt iiv_v
     if self.tv_v > 0:
         v = self.tv_v + self.iiv_v
-        __X__[v, self.iiv_v] = 1  # mtran: v wrt iiv_v
-
-    return v
+        if __FIRST_ORDER:
+            __X__[v, self.iiv_v] = 1  # mtran: v wrt iiv_v
+    __Y__["prediction"] = v
+    if __FIRST_ORDER:
+        __Y__[self.iiv_v] = __X__[v, self.iiv_v]  # mtran: __Y__ wrt iiv_v
+    return
 """
 
     src = inspect.getsource(OverrideInIf.pred).strip()
@@ -214,7 +226,7 @@ def pred(self):
         globals={
             "exp": exp,
         },
-        symbol_defs=SymbolDefs([instance.tv_v, instance.iiv_v]),
+        symbol_defs=SymbolNamespace([instance.tv_v, instance.iiv_v]),
     )
 
     transformed = _transform(src, transformer)
@@ -238,14 +250,19 @@ def test_carryover():
     expected = """
 def pred(self):
     v = self.tv_v * exp(self.iiv_v)
-    __X__[v, self.iiv_v] = self.tv_v * exp(self.iiv_v)  # mtran: v wrt iiv_v
+    if __FIRST_ORDER:
+        __X__[v, self.iiv_v] = self.tv_v * exp(self.iiv_v)  # mtran: v wrt iiv_v
     z = v
-    __X__[z, self.iiv_v] = __X__[v, self.iiv_v]  # mtran: z wrt iiv_v
+    if __FIRST_ORDER:
+        __X__[z, self.iiv_v] = __X__[v, self.iiv_v]  # mtran: z wrt iiv_v
     if v < 0:
         z = -v
-        __X__[z, self.iiv_v] = -1 * __X__[v, self.iiv_v]  # mtran: z wrt iiv_v
-
-    return z
+        if __FIRST_ORDER:
+            __X__[z, self.iiv_v] = -1 * __X__[v, self.iiv_v]  # mtran: z wrt iiv_v
+    __Y__["prediction"] = z
+    if __FIRST_ORDER:
+        __Y__[self.iiv_v] = __X__[z, self.iiv_v]  # mtran: __Y__ wrt iiv_v
+    return
     """
 
     src = inspect.getsource(Carryover.pred).strip()
@@ -258,7 +275,7 @@ def pred(self):
         globals={
             "exp": exp,
         },
-        symbol_defs=SymbolDefs([instance.tv_v, instance.iiv_v]),
+        symbol_defs=SymbolNamespace([instance.tv_v, instance.iiv_v]),
     )
 
     transformed = _transform(src, transformer)

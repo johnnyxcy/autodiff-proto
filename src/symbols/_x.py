@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import libcst as cst
-from sympy import Expr, Symbol
+from sympy import Symbol
 
 from typings import AsCSTExpression
 
@@ -59,7 +59,7 @@ class XWrt(Symbol, AsCSTExpression):
         """
         slice = [
             cst.SubscriptElement(
-                slice=cst.Index(cst.Name(value=self.xname)),
+                slice=cst.Index(cst.SimpleString(value='"' + self.xname + '"')),
             ),
         ]
         if isinstance(self.wrt, AsCSTExpression):
@@ -87,10 +87,8 @@ class XTransRack:
 
     name = "__X__"
 
-    def __getitem__(self, x: Expr, wrt: Symbol, wrt2nd: Symbol | None = None) -> XWrt:
+    def __getitem__(self, x: str, wrt: Symbol, wrt2nd: Symbol | None = None) -> XWrt:
         """
         Get the x_wrt expression for the given variable and wrt.
         """
-        if isinstance(x, Symbol):
-            return XWrt(x.name, wrt, wrt2nd)
-        raise NotImplementedError(f"Unknown expression type: {type(x)}")
+        return XWrt(x, wrt, wrt2nd)

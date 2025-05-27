@@ -5,9 +5,34 @@ from typing import Literal, overload
 import libcst as cst
 from sympy import Expr, Symbol
 
+from syntax.transformers.inline_func_transpile import do_not_inline_transpile
 from typings import AsCSTExpression
 
 YTypeLiteral = Literal["prediction", "likelihood", "-2loglikelihood"]
+
+
+class YValue(Symbol):
+    """
+    A class to represent a return value Y.
+
+    It can be used to represent a variable that is a return value of a function.
+    """
+
+    __slots__ = ("_expr", "_y")
+
+    def __new__(cls, y: Y, expr: Expr) -> YValue:
+        self_ = super().__new__(cls, "__Yvalue__")
+        self_._y = y
+        self_._expr = expr
+        return self_
+
+    @property
+    def expr(self) -> Expr:
+        return self._expr
+
+    @property
+    def y(self) -> Y:
+        return self._y
 
 
 class Y(Symbol, AsCSTExpression):
@@ -40,6 +65,12 @@ class Y(Symbol, AsCSTExpression):
                 ),
             ],
         )
+
+    def __call__(self, expr: Expr) -> YValue:
+        """
+        Call the Y object with an expression to create a YValue.
+        """
+        return YValue(y=self, expr=expr)
 
 
 class YWrt(Symbol, AsCSTExpression):
@@ -118,18 +149,21 @@ class YTransRack:
             return YWrt(__arg0, __arg1)
 
 
-def prediction(expr: Expr) -> Y:
+@do_not_inline_transpile
+def prediction(expr: Expr) -> Expr:
     """
-    Get the prediction Y object.
+    Mark the return value as prediction.
     """
-    return Y("prediction")
+    return Y("prediction")(expr)
 
 
-def likelihood(expr: Expr, transform: Literal["-2log", False] = False) -> Y:
+@do_not_inline_transpile
+def likelihood(expr: Expr, transform: Literal["-2log", False] = False) -> Expr:
     """
-    Get the likelihood Y object.
+    Mark the return value as likelihood.
+    If transform is "-2log", it will be marked as -2log likelihood.
     """
     if transform == "-2log":
-        return Y("-2loglikelihood")
+        return Y("-2loglikelihood")(expr)
     else:
-        return Y("likelihood")
+        return Y("likelihood")(expr)

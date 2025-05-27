@@ -18,7 +18,9 @@ class ParamArg(AsCSTExpression):
 
     def _as_cst_slices(self) -> typing.Sequence[cst.SubscriptElement]:
         return [
-            cst.SubscriptElement(cst.Index(cst.SimpleString(value=self.param_name))),
+            cst.SubscriptElement(
+                cst.Index(cst.SimpleString(value='"' + self.param_name + '"'))
+            ),
         ]
 
     def as_cst_expression(self) -> cst.BaseExpression:
@@ -26,6 +28,13 @@ class ParamArg(AsCSTExpression):
             value=cst.Name(ParamsArgTransRack.name),
             slice=self._as_cst_slices(),
         )
+
+    def diff(self, wrt: Symbol, wrt2nd: Symbol | None = None) -> ParamArgWrt:
+        """
+        Returns a derivative of the parameter argument with respect to a variable.
+        This is a placeholder method and should be implemented in subclasses.
+        """
+        return ParamArgWrt(param_name=self.param_name, wrt=wrt, wrt2nd=wrt2nd)
 
 
 class IndexedParamArg(ParamArg):
@@ -43,19 +52,30 @@ class IndexedParamArg(ParamArg):
 
     def _as_cst_slices(self) -> typing.Sequence[cst.SubscriptElement]:
         return [
-            cst.SubscriptElement(cst.Index(cst.SimpleString(value=self.param_name))),
+            cst.SubscriptElement(
+                cst.Index(cst.SimpleString(value='"' + self.param_name + '"'))
+            ),
             cst.SubscriptElement(cst.Index(cst.Integer(value=str(self.index)))),
         ]
+
+    def diff(self, wrt: Symbol, wrt2nd: Symbol | None = None) -> IndexedParamArgWrt:
+        """
+        Returns a derivative of the indexed parameter argument with respect to a variable.
+        This is a placeholder method and should be implemented in subclasses.
+        """
+        return IndexedParamArgWrt(
+            param_name=self.param_name, index=self.index, wrt=wrt, wrt2nd=wrt2nd
+        )
 
 
 class ParamArgWrt(AsCSTExpression):
     def __init__(
         self,
-        param_arg: str,
+        param_name: str,
         wrt: Symbol,
         wrt2nd: Symbol | None = None,
     ) -> None:
-        self._param_name = param_arg
+        self._param_name = param_name
         self._wrt = wrt
         self._wrt2nd = wrt2nd
 
@@ -73,7 +93,9 @@ class ParamArgWrt(AsCSTExpression):
 
     def _as_cst_slices(self) -> typing.Sequence[cst.SubscriptElement]:
         slice_elements: list[cst.SubscriptElement] = [
-            cst.SubscriptElement(cst.Index(cst.SimpleString(value=self.param_name))),
+            cst.SubscriptElement(
+                cst.Index(cst.SimpleString(value='"' + self.param_name + '"'))
+            ),
         ]
         if isinstance(self.wrt, AsCSTExpression):
             slice_elements.append(
@@ -110,12 +132,13 @@ class ParamArgWrt(AsCSTExpression):
 class IndexedParamArgWrt(ParamArgWrt):
     def __init__(
         self,
-        param_arg: tuple[str, int],
+        param_name: str,
+        index: int,
         wrt: Symbol,
         wrt2nd: Symbol | None = None,
     ) -> None:
-        super().__init__(param_arg[0], wrt, wrt2nd)
-        self._index = param_arg[1]
+        super().__init__(param_name, wrt, wrt2nd)
+        self._index = index
 
     @property
     def index(self) -> int:
@@ -130,24 +153,32 @@ class IndexedParamArgWrt(ParamArgWrt):
         ]
 
 
+class ParamArgFactory(typing.Protocol):
+    def __call__(self, param_name: str) -> ParamArg: ...
+
+
+class IndexedParamArgFactory(typing.Protocol):
+    def __call__(self, param_name: str, index: int) -> IndexedParamArg: ...
+
+
+class ParamArgWrtFactory(typing.Protocol):
+    def __call__(
+        self, param_name: str, wrt: Symbol, wrt2nd: Symbol | None = None
+    ) -> ParamArgWrt: ...
+
+
+class IndexedParamArgWrtFactory(typing.Protocol):
+    def __call__(
+        self, param_name: str, index: int, wrt: Symbol, wrt2nd: Symbol | None = None
+    ) -> IndexedParamArgWrt: ...
+
+
 class ParamsArgTransRack:
     """
     Representing a dummy getter for ParamArg symbol and the corresponding derivatives to be used in MTran.
     """
 
     name: str = "__P__"
-
-    def __init__(
-        self,
-        cls_param_arg: type[ParamArg] = ParamArg,
-        cls_indexed_param_arg: type[IndexedParamArg] = IndexedParamArg,
-        cls_param_arg_wrt: type[ParamArgWrt] = ParamArgWrt,
-        cls_indexed_param_arg_wrt: type[IndexedParamArgWrt] = IndexedParamArgWrt,
-    ):
-        self._cls_param_arg = cls_param_arg
-        self._cls_indexed_param_arg = cls_indexed_param_arg
-        self._cls_param_arg_wrt = cls_param_arg_wrt
-        self._cls_indexed_param_arg_wrt = cls_indexed_param_arg_wrt
 
     def __setitem__(self, __key: typing.Any, __value: typing.Any) -> None:
         raise NotImplementedError()
@@ -187,34 +218,30 @@ class ParamsArgTransRack:
         | tuple[str, int, Symbol, Symbol],
     ) -> ParamArg | IndexedParamArg | ParamArgWrt | IndexedParamArgWrt:
         if isinstance(__key, str):
-            return self._cls_param_arg(param_name=__key)
+            return ParamArg(param_name=__key)
         elif isinstance(__key, tuple):
             if len(__key) == 2:
                 param_name, index_or_wrt = __key
 
                 if isinstance(index_or_wrt, int):
-                    return self._cls_indexed_param_arg(
-                        param_name=param_name, index=index_or_wrt
-                    )
+                    return IndexedParamArg(param_name=param_name, index=index_or_wrt)
                 else:
-                    return self._cls_param_arg_wrt(
-                        param_arg=param_name, wrt=index_or_wrt
-                    )
+                    return ParamArgWrt(param_name=param_name, wrt=index_or_wrt)
 
             elif len(__key) == 3:
                 param_name, index_or_wrt, wrt_or_wrt2nd = __key
                 if isinstance(index_or_wrt, int):
-                    return self._cls_indexed_param_arg_wrt(
-                        param_arg=(param_name, index_or_wrt), wrt=wrt_or_wrt2nd
+                    return IndexedParamArgWrt(
+                        param_name=param_name, index=index_or_wrt, wrt=wrt_or_wrt2nd
                     )
                 else:
-                    return self._cls_param_arg_wrt(
-                        param_arg=param_name, wrt=index_or_wrt, wrt2nd=wrt_or_wrt2nd
+                    return ParamArgWrt(
+                        param_name=param_name, wrt=index_or_wrt, wrt2nd=wrt_or_wrt2nd
                     )
             elif len(__key) == 4:
                 param_name, index, wrt, wrt2nd = __key
-                return self._cls_indexed_param_arg_wrt(
-                    param_arg=(param_name, index), wrt=wrt, wrt2nd=wrt2nd
+                return IndexedParamArgWrt(
+                    param_name=param_name, index=index, wrt=wrt, wrt2nd=wrt2nd
                 )
             else:
                 raise TypeError()

@@ -2,13 +2,14 @@ from typing import Generator
 
 from sympy import Basic, Symbol
 
-from symbols._ode import CmtSolvedA, Compartment
+from symbols._column import ColVar
+from symbols._ode import Compartment
 from symbols._omega_eta import Eta
 from symbols._sigma_eps import Eps
 from symbols._theta import Theta
 
 
-class SymbolDefs(list[Theta | Eta | Eps | Compartment]):
+class SymbolNamespace(list[Theta | Eta | Eps | Compartment | ColVar]):
     def iter_theta(self) -> Generator[Theta, None, None]:
         """Get all theta symbols in the definition."""
         for s in self:
@@ -33,11 +34,11 @@ class SymbolDefs(list[Theta | Eta | Eps | Compartment]):
             if isinstance(s, Compartment):
                 yield s
 
-    def iter_cmt_A(self) -> Generator[CmtSolvedA, None, None]:
-        """Get all compartment A symbols in the definition."""
+    def iter_colvar(self) -> Generator[ColVar, None, None]:
+        """Get all column variables in the definition."""
         for s in self:
-            if isinstance(s, Compartment):
-                yield s.A
+            if isinstance(s, ColVar):
+                yield s
 
     def iter_symbols(self) -> Generator[Symbol, None, None]:
         """Get all symbols in the definition."""
@@ -48,8 +49,8 @@ class SymbolDefs(list[Theta | Eta | Eps | Compartment]):
                 yield s
             elif isinstance(s, Eps):
                 yield s
-            elif isinstance(s, Compartment):
-                yield s.A
+            elif isinstance(s, ColVar):
+                yield s
             else:
                 raise TypeError(f"Unknown symbol type: {type(s)}")
 
@@ -62,6 +63,7 @@ class SymbolDefs(list[Theta | Eta | Eps | Compartment]):
                 return True
             elif isinstance(s, Eps) and s == symbol:
                 return True
-            elif isinstance(s, Compartment) and s.A == symbol:
+            elif isinstance(s, ColVar) and s == symbol:
                 return True
+
         return False

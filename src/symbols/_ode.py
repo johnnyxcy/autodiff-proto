@@ -6,7 +6,7 @@ from uuid import uuid4
 import libcst as cst
 from sympy import Expr, Number, Symbol
 
-from symbols._args import ParamArg, ParamArgWrt, ParamsArgTransRack
+from symbols._args import ParamArg, ParamArgWrt
 from typings import AsCSTExpression, Expression, ValueType
 
 
@@ -17,7 +17,33 @@ class IntegralT(Symbol):
 INTEGRAL_T: typing.Final[IntegralT] = IntegralT("__t")
 
 
-class CmtAlag(Symbol):
+class CmtDosingParamSymbol(Symbol, AsCSTExpression):
+    @property
+    def param_name(self) -> str:
+        """str: Name of the parameter."""
+        raise NotImplementedError(
+            "This method should be implemented in subclasses to return the parameter name."
+        )
+
+    @property
+    def cmt(self) -> Compartment:
+        """Compartment: Corresponding compartment."""
+        raise NotImplementedError(
+            "This method should be implemented in subclasses to return the corresponding compartment."
+        )
+
+    def as_param_arg(self) -> CmtParamArg:
+        """Convert the CmtDosingParamSymbol object to a CmtParamArg."""
+        return CmtParamArg(param_name=self.param_name, cmt=self.cmt)
+
+    def as_cst_expression(self) -> cst.BaseExpression:
+        """
+        Convert the CmtDosingParamSymbol object to a CST expression.
+        """
+        return self.as_param_arg().as_cst_expression()
+
+
+class CmtAlag(CmtDosingParamSymbol):
     """Class of compartment absorption lag.
 
     Attributes
@@ -31,11 +57,16 @@ class CmtAlag(Symbol):
     __slots__ = ("_cmt", "_expr")
 
     def __new__(cls, cmt: Compartment) -> CmtAlag:
-        name = f"Alag_{{{cmt.name}}}"
+        name = f"__Alag_{{{cmt.name}}}"
         instance = typing.cast(CmtAlag, super().__new__(cls, name))
         instance._cmt = cmt
         instance._expr = 0.0
         return instance
+
+    @property
+    def param_name(self) -> str:
+        """str: Name of the parameter."""
+        return "ALAG"
 
     @property
     def cmt(self) -> Compartment:
@@ -48,7 +79,7 @@ class CmtAlag(Symbol):
         return self._expr
 
 
-class CmtFraction(Symbol):
+class CmtFraction(CmtDosingParamSymbol):
     """Class of compartment bioavailability fraction.
 
     Attributes
@@ -62,11 +93,16 @@ class CmtFraction(Symbol):
     __slots__ = ("_cmt", "_expr")
 
     def __new__(cls, cmt: Compartment) -> CmtFraction:
-        name = f"Fraction_{{{cmt.name}}}"
+        name = f"__Fraction_{{{cmt.name}}}"
         instance = typing.cast(CmtFraction, super().__new__(cls, name))
         instance._cmt = cmt
         instance._expr = 1.0
         return instance
+
+    @property
+    def param_name(self) -> str:
+        """str: Name of the parameter."""
+        return "FRACTION"
 
     @property
     def cmt(self) -> Compartment:
@@ -79,7 +115,7 @@ class CmtFraction(Symbol):
         return self._expr
 
 
-class CmtRate(Symbol):
+class CmtRate(CmtDosingParamSymbol):
     """Class of compartment dose rate.
 
     Attributes
@@ -93,11 +129,16 @@ class CmtRate(Symbol):
     __slots__ = ("_cmt", "_expr")
 
     def __new__(cls, cmt: Compartment) -> CmtRate:
-        name = f"Rate_{{{cmt.name}}}"
+        name = f"__Rate_{{{cmt.name}}}"
         instance = typing.cast(CmtRate, super().__new__(cls, name))
         instance._cmt = cmt
         instance._expr = 0.0
         return instance
+
+    @property
+    def param_name(self) -> str:
+        """str: Name of the parameter."""
+        return "RATE"
 
     @property
     def cmt(self) -> Compartment:
@@ -110,7 +151,7 @@ class CmtRate(Symbol):
         return self._expr
 
 
-class CmtDuration(Symbol):
+class CmtDuration(CmtDosingParamSymbol):
     """Class of compartment dose duration.
 
     Attributes
@@ -124,11 +165,16 @@ class CmtDuration(Symbol):
     __slots__ = ("_cmt", "_expr")
 
     def __new__(cls, cmt: Compartment) -> CmtDuration:
-        name = f"Duration_{{{cmt.name}}}"
+        name = f"__Duration_{{{cmt.name}}}"
         instance = typing.cast(CmtDuration, super().__new__(cls, name))
         instance._cmt = cmt
         instance._expr = 0.0
         return instance
+
+    @property
+    def param_name(self) -> str:
+        """str: Name of the parameter."""
+        return "DURATION"
 
     @property
     def cmt(self) -> Compartment:
@@ -141,7 +187,7 @@ class CmtDuration(Symbol):
         return self._expr
 
 
-class CmtInitialA(Symbol):
+class CmtInitialA(CmtDosingParamSymbol):
     """Class of initial compartment amounts.
 
     Attributes
@@ -155,11 +201,16 @@ class CmtInitialA(Symbol):
     __slots__ = ("_cmt", "_expr")
 
     def __new__(cls, cmt: Compartment) -> CmtInitialA:
-        name = f"A0_{{{cmt.name}}}"
+        name = f"__A0_{{{cmt.name}}}"
         instance = typing.cast(CmtInitialA, super().__new__(cls, name))
         instance._cmt = cmt
         instance._expr = 0.0
         return instance
+
+    @property
+    def param_name(self) -> str:
+        """str: Name of the parameter."""
+        return "A0"
 
     @property
     def cmt(self) -> Compartment:
@@ -184,7 +235,7 @@ class CmtSolvedA(Symbol, AsCSTExpression):
     __slots__ = "_cmt"
 
     def __new__(cls, cmt: Compartment) -> CmtSolvedA:
-        name = f"A_{{{cmt.name}}}"
+        name = f"__A_{{{cmt.name}}}"
         instance = typing.cast(CmtSolvedA, super().__new__(cls, name))
         instance._cmt = cmt
         return instance
@@ -343,7 +394,7 @@ class CmtDADt(Symbol, AsCSTExpression):
     __slots__ = ("_cmt", "_expr")
 
     def __new__(cls, cmt: Compartment) -> CmtDADt:
-        name = f"dA_{{{cmt.name}}}dt"
+        name = f"__dA_{{{cmt.name}}}dt"
         instance = typing.cast(CmtDADt, super().__new__(cls, name))
         instance._cmt = cmt
         instance._expr = Number(0.0)
@@ -503,8 +554,27 @@ class CmtParamArg(ParamArg):
 
     def as_cst_expression(self) -> cst.BaseExpression:
         return cst.Subscript(
-            value=cst.Name(ParamsArgTransRack.name),
-            slice=self._as_cst_slices(),
+            value=cst.Name(CmtParamArgTransRack.name),
+            slice=[
+                cst.SubscriptElement(
+                    slice=cst.Index(
+                        cst.Attribute(
+                            value=cst.Name("self"),
+                            attr=cst.Name(self.cmt.name),
+                        )
+                    ),
+                ),
+                *self._as_cst_slices(),
+            ],
+        )
+
+    def diff(self, wrt: Symbol, wrt2nd: Symbol | None = None) -> ParamArgWrt:
+        """
+        Returns a derivative of the parameter argument with respect to a variable.
+        This is a placeholder method and should be implemented in subclasses.
+        """
+        return CmtParamArgWrt(
+            cmt=self.cmt, param_name=self.param_name, wrt=wrt, wrt2nd=wrt2nd
         )
 
 
@@ -525,8 +595,18 @@ class CmtParamArgWrt(ParamArgWrt):
 
     def as_cst_expression(self) -> cst.BaseExpression:
         return cst.Subscript(
-            value=cst.Name(ParamsArgTransRack.name),
-            slice=self._as_cst_slices(),
+            value=cst.Name(CmtParamArgTransRack.name),
+            slice=[
+                cst.SubscriptElement(
+                    slice=cst.Index(
+                        cst.Attribute(
+                            value=cst.Name("self"),
+                            attr=cst.Name(self.cmt.name),
+                        )
+                    ),
+                ),
+                *self._as_cst_slices(),
+            ],
         )
 
 
@@ -680,12 +760,12 @@ class Compartment:
     @name.setter
     def name(self, val: str) -> None:
         self._name = val
-        self._A.name = f"A_{val}"
-        self._dAdt.name = f"dA_{val}dt"
-        self._alag.name = f"Alag_{val}"
-        self._fraction.name = f"Fraction_{val}"
-        self._rate.name = f"Rate_{val}"
-        self._duration.name = f"Duration_{val}"
+        self._A.name = f"__A_{val}"
+        self._dAdt.name = f"__dA_{val}dt"
+        self._alag.name = f"__Alag_{val}"
+        self._fraction.name = f"__Fraction_{val}"
+        self._rate.name = f"__Rate_{val}"
+        self._duration.name = f"__Duration_{val}"
 
     @property
     def alag(self) -> CmtAlag:
@@ -866,13 +946,52 @@ class Compartment:
         """
         return self._default_obs
 
+
+class CmtParamArgTransRack:
+    """A rack for compartment parameter arguments.
+
+    This class is used to create and manage compartment parameter arguments.
+    It allows access to compartment parameters by their names or by their names
+    and the variables they are differentiated with respect to.
+    """
+
+    name: str = "__CMTP__"
+
+    def __setitem__(self, __key: typing.Any, __value: typing.Any) -> None:
+        raise NotImplementedError()
+
+    @typing.overload
+    def __getitem__(self, __cmt: Compartment, __name: str) -> CmtParamArg:
+        """Get a parameter argument by its name."""
+        ...
+
+    @typing.overload
     def __getitem__(
-        self, __key: str | tuple[str, Symbol] | tuple[str, Symbol, Symbol]
-    ) -> ParamArg | ParamArgWrt:
-        return ParamsArgTransRack(
-            cls_param_arg=CmtParamArg,
-            cls_param_arg_wrt=CmtParamArgWrt,
-        )[__key]
+        self,
+        __cmt: Compartment,
+        __name: str,
+        __wrt: Symbol,
+        __wrt2nd: Symbol | None = None,
+    ) -> CmtParamArgWrt:
+        """Get a parameter argument derivative with respect to a variable."""
+        ...
+
+    def __getitem__(
+        self,
+        __cmt: Compartment,
+        __name: str,
+        __wrt: Symbol | None = None,
+        __wrt2nd: Symbol | None = None,
+    ) -> CmtParamArg | CmtParamArgWrt:
+        if __wrt is not None:
+            return CmtParamArgWrt(
+                param_name=__name,
+                cmt=__cmt,
+                wrt=__wrt,
+                wrt2nd=__wrt2nd,
+            )
+        else:
+            return CmtParamArg(param_name=__name, cmt=__cmt)
 
 
 def compartment(
