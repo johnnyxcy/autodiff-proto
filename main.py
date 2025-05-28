@@ -10,7 +10,8 @@ from api import (
     theta,
 )
 from module.defs.ode import odeint
-from module.descriptor.distill import distill
+from module.descriptor.cc import CCTranslator
+from module.descriptor.distillation import distill
 from syntax.unparse import unparse
 from utils.loggings import logger
 
@@ -69,17 +70,7 @@ class MyDef(EvOneCmtLinear.Physio):
         self.iiv_ka = omega(0.1)
 
     def pred(self):
-        v = self.pop_v * exp(self.iiv_v)
-        # F0 = (
-        #     self.solve(
-        #         cl=self.pop_cl * exp(self.iiv_cl),
-        #         v=v,
-        #         ka=self.pop_ka * exp(self.iiv_ka),
-        #     )
-        #     + 1
-        # )
-
-        # F = self.cmt_central.A / v
+        v = self.pop_v * exp(self.iiv_v)  # Volume(ng/mL)
         F = self.solve(
             cl=self.pop_cl * exp(self.iiv_cl),
             v=v,
@@ -109,3 +100,5 @@ if __name__ == "__main__":
     interpreted = distill(my_def)
 
     print(unparse(interpreted._code_gen()))
+
+    print("\n".join(CCTranslator(descriptor=interpreted).translate()))

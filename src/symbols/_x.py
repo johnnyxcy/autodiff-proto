@@ -87,8 +87,16 @@ class XTransRack:
 
     name = "__X__"
 
-    def __getitem__(self, x: str, wrt: Symbol, wrt2nd: Symbol | None = None) -> XWrt:
+    def __getitem__(
+        self, __key: tuple[str, Symbol] | tuple[str, Symbol, Symbol | None]
+    ) -> XWrt:
         """
         Get the x_wrt expression for the given variable and wrt.
         """
+        if len(__key) == 2:
+            x, wrt = __key
+            wrt2nd = None
+        else:
+            x, wrt, wrt2nd = __key
+
         return XWrt(x, wrt, wrt2nd)

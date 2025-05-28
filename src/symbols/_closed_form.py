@@ -15,6 +15,7 @@ __all__ = [
     "ClosedFormSolutionSolvedF",
     "ClosedFormSolutionSolvedFWrt",
     "ClosedFormSolutionTransRack",
+    "ClosedFormSolveCall",
 ]
 
 
@@ -250,3 +251,10 @@ class ClosedFormSolutionTransRack:  # Dummy
                     raise TypeError()
         else:
             raise TypeError()
+
+
+class ClosedFormSolveCall:
+    name = "__solve__"
+
+    def __call__(self) -> Symbol:
+        return Symbol(self.name)

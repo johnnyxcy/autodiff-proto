@@ -25,7 +25,7 @@ class ParamArg(AsCSTExpression):
 
     def as_cst_expression(self) -> cst.BaseExpression:
         return cst.Subscript(
-            value=cst.Name(ParamsArgTransRack.name),
+            value=cst.Name(ParamArgTransRack.name),
             slice=self._as_cst_slices(),
         )
 
@@ -124,7 +124,7 @@ class ParamArgWrt(AsCSTExpression):
 
     def as_cst_expression(self) -> cst.BaseExpression:
         return cst.Subscript(
-            value=cst.Name(ParamsArgTransRack.name),
+            value=cst.Name(ParamArgTransRack.name),
             slice=self._as_cst_slices(),
         )
 
@@ -173,7 +173,7 @@ class IndexedParamArgWrtFactory(typing.Protocol):
     ) -> IndexedParamArgWrt: ...
 
 
-class ParamsArgTransRack:
+class ParamArgTransRack:
     """
     Representing a dummy getter for ParamArg symbol and the corresponding derivatives to be used in MTran.
     """

@@ -52,7 +52,7 @@ class YType(Symbol, AsCSTExpression):
         return cst.Subscript(
             value=cst.Name(YTransRack.name),
             slice=[
-                cst.SubscriptElement(cst.Index(cst.Name("type"))),
+                cst.SubscriptElement(cst.Index(cst.SimpleString(value='"type"'))),
             ],
         )
 
@@ -117,24 +117,30 @@ class YTransRack:
     @overload
     def __getitem__(self, __slice: slice[None, None, None]) -> Y: ...
     @overload
-    def __getitem__(self, __type: type) -> YType: ...
+    def __getitem__(self, __type: Literal["type"]) -> YType: ...
     @overload
-    def __getitem__(self, __wrt: Symbol, __wrt2nd: Symbol | None = None) -> YWrt: ...
+    def __getitem__(self, __wrt: Symbol | tuple[Symbol, Symbol]) -> YWrt: ...
 
     def __getitem__(
         self,
-        __arg0: Symbol | type | slice[None, None, None],
-        __arg1: Symbol | None = None,
+        __arg0: Symbol
+        | tuple[Symbol, Symbol]
+        | Literal["type"]
+        | slice[None, None, None],
     ) -> Y | YType | YWrt:
         """
         Get the x_wrt expression for the given variable and wrt.
         """
         if isinstance(__arg0, slice):
             return Y()
-        elif isinstance(__arg0, type):
+        elif isinstance(__arg0, str) and __arg0 == "type":
             return YType()
+        elif isinstance(__arg0, Symbol):
+            return YWrt(__arg0)
+        elif isinstance(__arg0, tuple):
+            return YWrt(__arg0[0], __arg0[1])
         else:
-            return YWrt(__arg0, __arg1)
+            raise TypeError("不支持的索引类型: {0}".format(type(__arg0)))
 
 
 class YValue(Expr):

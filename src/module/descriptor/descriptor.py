@@ -40,6 +40,11 @@ class ModuleDescriptor(CodeGen):
     preprocessed_pred: SrcEncapsulation[cst.FunctionDef]
     postprocessed_pred: SrcEncapsulation[cst.FunctionDef]
 
+    @property
+    def is_closed_form_solution(self) -> bool:
+        """bool: If the module is a closed form solution."""
+        return self.class_type not in ["OdeModule", "Module"]
+
     def _code_gen(self) -> cst.ClassDef:
         """
         Generate the code for the module descriptor.

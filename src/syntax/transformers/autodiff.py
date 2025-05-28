@@ -34,6 +34,7 @@ from symbols._closed_form import (
     ClosedFormSolutionSolvedAWrt,
     ClosedFormSolutionSolvedF,
     ClosedFormSolutionSolvedFWrt,
+    ClosedFormSolveCall,
 )
 from symbols._cmt import (
     CmtDADt,
@@ -55,6 +56,9 @@ from syntax.unparse import unparse
 from syntax.with_comment import with_comment
 
 __all__ = ["AutoDiffTransformer"]
+
+FIRST_ORDER = Symbol("__FIRST_ORDER")
+SECOND_ORDER = Symbol("__SECOND_ORDER")
 
 
 @dataclass(kw_only=True)
@@ -403,7 +407,7 @@ class AutoDiffTransformer(cst.CSTTransformer):
                 )
             stmts.append(
                 cst.If(
-                    test=cst.Name("__FIRST_ORDER"),
+                    test=cst.Name(FIRST_ORDER.name),
                     body=cst.IndentedBlock(body=first_order_body),
                 )
             )
@@ -466,7 +470,7 @@ class AutoDiffTransformer(cst.CSTTransformer):
                 )
             stmts.append(
                 cst.If(
-                    test=cst.Name("__FIRST_ORDER"),
+                    test=cst.Name(FIRST_ORDER.name),
                     body=cst.IndentedBlock(body=first_order_body),
                 )
             )
@@ -500,7 +504,7 @@ class AutoDiffTransformer(cst.CSTTransformer):
             )
             transformed.append(
                 cst.SimpleStatementLine(
-                    body=[cst.Expr(cst.Call(cst.Name("__solve__")))]
+                    body=[cst.Expr(cst.Call(cst.Name(ClosedFormSolveCall.name)))]
                 ),
             )
             if isinstance(target, cst.Name):
@@ -604,7 +608,7 @@ class AutoDiffTransformer(cst.CSTTransformer):
         if len(first_order_body) > 0:
             transformed.append(
                 cst.If(
-                    test=cst.Name("__FIRST_ORDER"),
+                    test=cst.Name(FIRST_ORDER.name),
                     body=cst.IndentedBlock(body=first_order_body),
                 )
             )
@@ -640,9 +644,9 @@ class AutoDiffTransformer(cst.CSTTransformer):
                 )
             )
 
-        y_type: YTypeLiteral = "prediction"
+        y_type = 0
         if isinstance(evaluated_value, YValue):
-            y_type = evaluated_value.type
+            y_type = evaluated_value.flag
             evaluated_value = evaluated_value.expr
 
         transformed.extend(
@@ -653,7 +657,7 @@ class AutoDiffTransformer(cst.CSTTransformer):
                             targets=[
                                 cst.AssignTarget(target=YType().as_cst_expression())
                             ],
-                            value=cst.SimpleString(value=f'"{y_type}"'),
+                            value=cst.Integer(value=str(y_type)),
                         )
                     ]
                 ),
@@ -699,7 +703,7 @@ class AutoDiffTransformer(cst.CSTTransformer):
         if len(first_order_body) > 0:
             transformed.append(
                 cst.If(
-                    test=cst.Name("__FIRST_ORDER"),
+                    test=cst.Name(FIRST_ORDER.name),
                     body=cst.IndentedBlock(body=first_order_body),
                 )
             )
