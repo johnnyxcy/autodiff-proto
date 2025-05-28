@@ -2,12 +2,13 @@ from __future__ import annotations
 
 import typing
 
+import libcst as cst
 from sympy import Symbol
 
-from typings import AsCSTExpression
+from typings import AsCSTExpression, CodeGen
 
 
-class SharedVar(Symbol):
+class SharedVar(Symbol, CodeGen):
     """Wrapped Symbol"""
 
     __slots__ = ("_init_value", "_dtype")
@@ -38,6 +39,20 @@ class SharedVar(Symbol):
     @property
     def dtype(self) -> typing.Literal["str", "numeric"]:
         return self._dtype
+
+    def _code_gen(self):
+        if self.dtype == "str" and isinstance(self.init_value, str):
+            value = cst.SimpleString(value=self.init_value)
+        elif self.dtype == "numeric" and isinstance(self.init_value, (float, int)):
+            value = cst.Float(value=str(self.init_value))
+        else:
+            raise TypeError(
+                f"Cannot generate code for SharedVar with type '{self.dtype}' and value '{self.init_value}'"
+            )
+        return cst.Assign(
+            targets=[cst.AssignTarget(cst.Name(self.name))],
+            value=value,
+        )
 
     def __deepcopy__(self, memo: dict[int, typing.Any]) -> SharedVar:
         d = id(self)

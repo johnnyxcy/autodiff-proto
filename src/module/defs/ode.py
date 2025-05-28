@@ -2,10 +2,12 @@ from __future__ import annotations
 
 import typing
 
+import libcst as cst
 import pydantic
 
 from module.defs.module import Module, ModuleMetaclass
-from symbols._ode import INTEGRAL_T, Compartment, IntegralT
+from symbols._cmt import INTEGRAL_T, Compartment, IntegralT
+from typings import CodeGen
 
 
 class odeint:
@@ -13,7 +15,11 @@ class odeint:
 
     class _internal:
         class OdeintSettings(pydantic.BaseModel):
-            pass
+            def as_configuration_dict(self) -> dict[str, typing.Any]:
+                """Convert the settings to a configuration dictionary."""
+                raise NotImplementedError(
+                    "This method should be implemented in subclasses"
+                )
 
         class DVERKSettings(OdeintSettings):
             tol: float = pydantic.Field(
@@ -25,6 +31,16 @@ class odeint:
             )
             max_fun_calls: int = pydantic.Field(ge=0, le=1000000)
 
+            def as_configuration_dict(self) -> dict[str, typing.Any]:
+                """Convert the settings to a configuration dictionary."""
+                return {
+                    "odeint.solver": "dverk",
+                    "odeint.dverk.tol": self.tol,
+                    "odeint.dverk.err_typ": self.err_typ,
+                    "odeint.dverk.floor": self.floor,
+                    "odeint.dverk.max_fun_calls": self.max_fun_calls,
+                }
+
         class LSODASettings(OdeintSettings):
             rel_tol: float = pydantic.Field(
                 default=1e-12, ge=1e-12, le=1e-2, allow_inf_nan=False
@@ -33,6 +49,15 @@ class odeint:
                 default=1e-12, ge=1e-12, le=1e-2, allow_inf_nan=False
             )
             max_steps: int = pydantic.Field(default=500, gt=0, le=10000)
+
+            def as_configuration_dict(self) -> dict[str, typing.Any]:
+                """Convert the settings to a configuration dictionary."""
+                return {
+                    "odeint.solver": "lsoda",
+                    "odeint.lsoda.rel_tol": self.rel_tol,
+                    "odeint.lsoda.abs_tol": self.abs_tol,
+                    "odeint.lsoda.max_steps": self.max_steps,
+                }
 
     @staticmethod
     def DVERK(
@@ -238,3 +263,33 @@ class OdeModule(Module, metaclass=ModuleMetaclass):
 
 
 OdeModuleT = typing.TypeVar("OdeModuleT", bound=OdeModule, default=typing.Any)
+
+
+def get_solver(
+    module: OdeModule,
+) -> odeint._internal.OdeintSettings:
+    """Get the ODE solver settings from the module.
+
+    Parameters
+    ----------
+    module : OdeModule
+        The ODE module to get the solver settings from.
+
+    Returns
+    -------
+    odeint._internal.OdeintSettings
+        The ODE solver settings.
+
+    Examples
+    --------
+    >>> model = TestModel()
+    >>> solver = get_solver(model)
+    """
+    solver = getattr(module, "_solver_", odeint.DVERK())
+    if isinstance(solver, typing.Callable):
+        solver = solver()
+    if not isinstance(solver, odeint._internal.OdeintSettings):
+        raise TypeError(
+            f"Invalid solver type {type(solver)}, expected `odeint._internal.OdeintSettings` or a callable returning it"
+        )
+    return solver

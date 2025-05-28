@@ -7,7 +7,7 @@ import libcst as cst
 from sympy import Expr, Number, Symbol
 
 from symbols._args import ParamArg, ParamArgWrt
-from typings import AsCSTExpression, Expression, ValueType
+from typings import AsCSTExpression, CodeGen, Expression, ValueType
 
 
 class IntegralT(Symbol):
@@ -610,7 +610,7 @@ class CmtParamArgWrt(ParamArgWrt):
         )
 
 
-class Compartment:
+class Compartment(CodeGen):
     """Class of compartments.
 
     Attributes
@@ -686,6 +686,55 @@ class Compartment:
             fraction=self._fraction._expr,
             rate=self._rate._expr,
             duration=self._duration._expr,
+        )
+
+    def _code_gen(self):
+        args: list[cst.Arg] = []
+
+        if self._default_dose:
+            args.append(
+                cst.Arg(
+                    keyword=cst.Name("default_dose"),
+                    value=cst.Name(value="True"),
+                )
+            )
+
+        if self._default_obs:
+            args.append(
+                cst.Arg(
+                    keyword=cst.Name("default_obs"),
+                    value=cst.Name(value="True"),
+                )
+            )
+
+        def should_explicit_declare(expr: Expression, default_value: float) -> bool:
+            """Check if the expression is a constant."""
+            return expr != default_value
+
+        if should_explicit_declare(self._init_value.expr, 0.0):
+            args.append(
+                cst.Arg(
+                    keyword=cst.Name("init_value"),
+                    value=cst.Float(value=str(self._init_value._expr)),
+                )
+            )
+        if should_explicit_declare(self._alag.expr, 0.0):
+            args.append(
+                cst.Arg(
+                    keyword=cst.Name("alag"),
+                    value=cst.Float(value=str(self._alag._expr)),
+                )
+            )
+        if should_explicit_declare(self._fraction.expr, 1.0):
+            args.append(
+                cst.Arg(
+                    keyword=cst.Name("fraction"),
+                    value=cst.Float(value=str(self._fraction._expr)),
+                )
+            )
+        return cst.Assign(
+            targets=[cst.AssignTarget(cst.Name(value=self.name))],
+            value=cst.Call(func=cst.Name(value=compartment.__name__), args=args),
         )
 
     @property

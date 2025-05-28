@@ -62,7 +62,7 @@ class ColVar(Symbol, CodeGen):
         return f"{type(self).__qualname__}(name={self.name}, col_name={self.col_name}, dtype={self.dtype}, is_categorical={self.is_categorical})"
 
     def _code_gen(self):
-        args: list[cst.Arg] = [cst.Arg(cst.Name(value=self.col_name))]
+        args: list[cst.Arg] = [cst.Arg(cst.SimpleString(value=f'"{self.col_name}"'))]
         if self.dtype != "numeric":
             args.append(
                 cst.Arg(

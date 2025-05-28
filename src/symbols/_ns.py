@@ -2,8 +2,8 @@ from typing import Generator
 
 from sympy import Basic, Symbol
 
+from symbols._cmt import Compartment
 from symbols._column import ColVar
-from symbols._ode import Compartment
 from symbols._omega_eta import Eta
 from symbols._sigma_eps import Eps
 from symbols._theta import Theta

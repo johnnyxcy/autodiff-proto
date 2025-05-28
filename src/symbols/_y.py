@@ -5,7 +5,7 @@ from typing import Literal, overload
 import libcst as cst
 from sympy import Expr, Symbol
 
-from syntax.transformers.inline_func_transpile import never_inline_transpile
+from syntax.transformers.inline.flags import never_inline_transpile
 from typings import AsCSTExpression
 
 YTypeLiteral = Literal["prediction", "likelihood", "-2loglikelihood"]

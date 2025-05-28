@@ -1,17 +1,20 @@
 from __future__ import annotations
 
 import re
-import typing
 from dataclasses import dataclass, field
-from typing import Any, Generic
+from typing import Any
 
 import libcst as cst
 
+from module.closed_form_solutions import get_qualname
+from module.defs.closed_form import ClosedFormSolutionModule, get_annotated_meta
 from module.defs.module import Module
-from module.defs.ode import OdeModule
-from symbols._column import AnyColVar, ColVar, ColVarCollection
+from module.defs.ode import OdeModule, get_solver
+from module.descriptor.common import ModuleClassTypeLiteral, SrcEncapsulation
+from module.descriptor.descriptor import ModuleDescriptor
+from symbols._cmt import Compartment
+from symbols._column import ColVar
 from symbols._ns import SymbolNamespace
-from symbols._ode import Compartment
 from symbols._omega_eta import Eta
 from symbols._sharedvar import SharedVar
 from symbols._sigma_eps import Eps
@@ -26,54 +29,16 @@ from utils.find_global import find_global_context
 from utils.inspect_hack import inspect
 from utils.loggings import logger
 
-T = typing.TypeVar("T", bound=cst.BaseCompoundStatement)
 
-
-@dataclass
-class CSTAndSrc(Generic[T]):
-    src: str
-    cst: T
-
-    def apply_transform(
-        self,
-        transformer: cst.CSTTransformer,
-    ) -> CSTAndSrc[T]:
-        transformed = cst.MetadataWrapper(cst.Module(body=[self.cst])).visit(
-            transformer
-        )
-        src = unparse(transformed)
-        return CSTAndSrc(
-            src=src,
-            cst=cst.ensure_type(transformed.body[0], type(self.cst)),
-        )
-
-
-@dataclass(kw_only=True)
-class ModuleDistillation:
+@dataclass(kw_only=True, frozen=True)
+class RuntimeModuleDescriptor(ModuleDescriptor):
     _o: Module
 
-    preprocessed_pred: CSTAndSrc[cst.FunctionDef]
-    postprocessed_pred: CSTAndSrc[cst.FunctionDef]
-
-    thetas: list[Theta]
-    etas: list[Eta]
-    epsilons: list[Eps]
-    colvars: list[ColVar]
-    # colvar_collections: list[ColVarCollection[AnyColVar]]
-    cmts: list[Compartment]
-    sharedvars: list[SharedVar]
-    n_cmt: int
-    advan: int
-    trans: int
-    defdose_cmt: int
-    defobs_cmt: int
     locals: dict[str, Any] = field(default_factory=dict)
     globals: dict[str, Any] = field(default_factory=dict)
 
-    docstring: str | None = None
 
-
-def distill(mod: Module, src: str | None = None) -> ModuleDistillation:
+def distill(mod: Module, src: str | None = None) -> RuntimeModuleDescriptor:
     logger.debug(
         "[MTran::interpret] Start interpreting module: %s", mod.__class__.__name__
     )
@@ -90,15 +55,15 @@ def distill(mod: Module, src: str | None = None) -> ModuleDistillation:
             "The module source code should contain and only contain class definition, "
             "no other code should be included."
         )
-    module_cls_def = CSTAndSrc(
+    module_cls_def = SrcEncapsulation(
         src=src, cst=cst.ensure_type(parsed_code_module.body[0], cst.ClassDef)
     )
     docstring = module_cls_def.cst.get_docstring()
 
-    pred_func_def: CSTAndSrc[cst.FunctionDef] | None = None
+    pred_func_def: SrcEncapsulation[cst.FunctionDef] | None = None
     try:
         pred_func_src = inspect.getsource(mod.pred)
-        pred_func_def = CSTAndSrc(
+        pred_func_def = SrcEncapsulation(
             src=pred_func_src,
             cst=cst.ensure_type(
                 cst.parse_module(pred_func_src).body[0], cst.FunctionDef
@@ -108,7 +73,7 @@ def distill(mod: Module, src: str | None = None) -> ModuleDistillation:
         # If inspect fails, try to find the pred function in the module class definition
         for stmt in module_cls_def.cst.body.body:
             if isinstance(stmt, cst.FunctionDef) and stmt.name.value == "pred":
-                pred_func_def = CSTAndSrc(src=unparse(stmt).strip(), cst=stmt)
+                pred_func_def = SrcEncapsulation(src=unparse(stmt).strip(), cst=stmt)
                 break
     if pred_func_def is None:
         raise ValueError(
@@ -172,7 +137,7 @@ def distill(mod: Module, src: str | None = None) -> ModuleDistillation:
 
     globals = find_global_context(o=mod)
 
-    if issubclass(mod.__class__, OdeModule):
+    if isinstance(mod, OdeModule):
         n_cmt = len(cmts)
         default_dose: int | None = None
         default_obs: int | None = None
@@ -222,18 +187,31 @@ def distill(mod: Module, src: str | None = None) -> ModuleDistillation:
         defobs_cmt = default_obs
         advan = 0
         trans = 0
+        class_type = OdeModule.__name__
+        configuration = get_solver(mod).as_configuration_dict()
     else:
+        configuration = {}
         # If the module is not derived from OdeModule, no compartments can be defined.
         if len(cmts) > 0:
             raise AssertionError(
                 "Your module must be derived from OdeModule if any compartment is defined"
             )
-        # TODO: ClosedFormSolutionModule
-        advan = 0
-        trans = 0
-        defdose_cmt = 0
-        defobs_cmt = 0
-        n_cmt = 0
+
+        if isinstance(mod, ClosedFormSolutionModule):
+            metadata = get_annotated_meta(mod.__class__)
+            advan = metadata.advan
+            trans = metadata.trans
+            defdose_cmt = metadata.defdose_cmt
+            defobs_cmt = metadata.defobs_cmt
+            n_cmt = metadata.n_cmt
+            class_type = get_qualname(mod)
+        else:
+            advan = 0
+            trans = 0
+            defdose_cmt = 0
+            defobs_cmt = 0
+            n_cmt = 0
+            class_type = Module.__name__
 
     locals = {
         "self": mod,
@@ -263,7 +241,7 @@ def distill(mod: Module, src: str | None = None) -> ModuleDistillation:
     )
     preprocessed_pred_func_def = preprocessed_pred_func_def.apply_transform(transpiler)
     logger.debug(
-        "[MTran::distill] Preprocessed finished",
+        "[MTran::distill] Preprocessed finished\n%s",
         preprocessed_pred_func_def.src,
     )
     # endregion
@@ -294,13 +272,16 @@ def distill(mod: Module, src: str | None = None) -> ModuleDistillation:
         autodiff_transformer
     )
     logger.debug(
-        "[MTran::distill] Postprocess finished",
+        "[MTran::distill] Postprocess finished\n%s",
         postprocessed_pred_func_def.src,
     )
     # endregion
 
-    return ModuleDistillation(
+    return RuntimeModuleDescriptor(
         _o=mod,
+        class_name=mod.__class__.__name__,
+        class_type=class_type,
+        configuration=configuration,
         preprocessed_pred=preprocessed_pred_func_def,
         postprocessed_pred=postprocessed_pred_func_def,
         thetas=thetas,

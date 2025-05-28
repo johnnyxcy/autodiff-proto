@@ -6,7 +6,7 @@ from typing import Any, TypeVar
 
 from module.defs.module import Module
 from symbols._closed_form import ClosedFormSolutionSolvedF
-from syntax.transformers.inline_func_transpile import never_inline_transpile
+from syntax.transformers.inline.flags import never_inline_transpile
 
 __all__ = [
     "ClosedFormSolutionModule",
