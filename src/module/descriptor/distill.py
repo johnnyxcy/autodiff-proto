@@ -18,7 +18,8 @@ from symbols._sigma_eps import Eps
 from symbols._theta import Theta
 from symbols._y import likelihood, prediction
 from syntax.transformers.autodiff import AutoDiffTransformer
-from syntax.transformers.inline_func_transpile import InlineFunctionTranspiler
+from syntax.transformers.inline.transpiler import InlineFunctionTranspiler
+from syntax.transformers.super_call_fixer import SuperCallFixer
 from syntax.unparse import unparse
 from syntax.visitor.no_private import NoPrivateVisitor
 from utils.find_global import find_global_context
@@ -51,11 +52,14 @@ class CSTAndSrc(Generic[T]):
 class ModuleDistillation:
     _o: Module
 
+    preprocessed_pred: CSTAndSrc[cst.FunctionDef]
+    postprocessed_pred: CSTAndSrc[cst.FunctionDef]
+
     thetas: list[Theta]
     etas: list[Eta]
     epsilons: list[Eps]
     colvars: list[ColVar]
-    colvar_collections: list[ColVarCollection[AnyColVar]]
+    # colvar_collections: list[ColVarCollection[AnyColVar]]
     cmts: list[Compartment]
     sharedvars: list[SharedVar]
     n_cmt: int
@@ -65,6 +69,8 @@ class ModuleDistillation:
     defobs_cmt: int
     locals: dict[str, Any] = field(default_factory=dict)
     globals: dict[str, Any] = field(default_factory=dict)
+
+    docstring: str | None = None
 
 
 def distill(mod: Module, src: str | None = None) -> ModuleDistillation:
@@ -87,6 +93,7 @@ def distill(mod: Module, src: str | None = None) -> ModuleDistillation:
     module_cls_def = CSTAndSrc(
         src=src, cst=cst.ensure_type(parsed_code_module.body[0], cst.ClassDef)
     )
+    docstring = module_cls_def.cst.get_docstring()
 
     pred_func_def: CSTAndSrc[cst.FunctionDef] | None = None
     try:
@@ -116,7 +123,7 @@ def distill(mod: Module, src: str | None = None) -> ModuleDistillation:
     etas: list[Eta] = []
     epsilons: list[Eps] = []
     colvars: list[ColVar] = []
-    colvar_collections: list[ColVarCollection[AnyColVar]] = []
+    # colvar_collections: list[ColVarCollection[AnyColVar]] = []
     cmts: list[Compartment] = []
     sharedvars: list[SharedVar] = []
 
@@ -134,8 +141,8 @@ def distill(mod: Module, src: str | None = None) -> ModuleDistillation:
             epsilons.append(attr)
         elif isinstance(attr, ColVar):
             colvars.append(attr)
-        elif isinstance(attr, ColVarCollection):
-            colvar_collections.append(attr)
+        # elif isinstance(attr, ColVarCollection):
+        #     colvar_collections.append(attr)
         elif isinstance(attr, Compartment):
             cmts.append(attr)
         # elif isinstance(attr, Rng):
@@ -157,11 +164,11 @@ def distill(mod: Module, src: str | None = None) -> ModuleDistillation:
             raise ValueError(f"Duplicate `column` definition for '{v.col_name}'")
         visited_colnames.add(v.col_name)
 
-    for v in colvar_collections:
-        for _, col in enumerate(v.values()):
-            if col.col_name in visited_colnames:
-                raise ValueError(f"Duplicate `column` definition for '{col.col_name}'")
-            visited_colnames.add(col.col_name)
+    # for v in colvar_collections:
+    #     for _, col in enumerate(v.values()):
+    #         if col.col_name in visited_colnames:
+    #             raise ValueError(f"Duplicate `column` definition for '{col.col_name}'")
+    #         visited_colnames.add(col.col_name)
 
     globals = find_global_context(o=mod)
 
@@ -239,43 +246,68 @@ def distill(mod: Module, src: str | None = None) -> ModuleDistillation:
     visitor = NoPrivateVisitor(source_code=src)
     cst.parse_module(src).visit(visitor)
 
-    # Transform 1: Inline Function Transpile
-    logger.debug("[MTran::distill] Start inline function transpile")
+    # region: Preprocess pred function
+    logger.debug("[MTran::distill] Preprocess transforms")
+    # Transform 1: Fix super()
+    logger.debug("[MTran::distill] super() call fixer@preprocess")
+    fixer = SuperCallFixer()
+    preprocessed_pred_func_def = pred_func_def.apply_transform(fixer)
+
+    # Transform 2: Inline Function Transpile
+    logger.debug("[MTran::distill] Inline function transpile@preprocess")
     transpiler = InlineFunctionTranspiler(
-        source_code=src,
+        stage="preprocess",
+        source_code=preprocessed_pred_func_def.src,
         locals=locals,
         globals=globals,
     )
-    pred_func_def = pred_func_def.apply_transform(transpiler)
-
+    preprocessed_pred_func_def = preprocessed_pred_func_def.apply_transform(transpiler)
     logger.debug(
-        "[MTran::distill] Inline function transpile result: %s",
-        pred_func_def.src,
+        "[MTran::distill] Preprocessed finished",
+        preprocessed_pred_func_def.src,
     )
+    # endregion
 
     # TODO: should save CST here before autodiff
 
+    # region: Postprocess pred function
+    # Transform 1: Inline Function Transpile for finalization
+    logger.debug("[MTran::distill] Inline function transpile@postprocess")
+    transpiler = InlineFunctionTranspiler(
+        stage="postprocess",
+        source_code=preprocessed_pred_func_def.src,
+        locals=locals,
+        globals=globals,
+    )
+    postprocessed_pred_func_def = preprocessed_pred_func_def.apply_transform(transpiler)
+
     # Transform 2: Automatic Gradient
+    logger.debug("[MTran::distill] Automatic differentiation@postprocess")
     autodiff_transformer = AutoDiffTransformer(
-        source_code=pred_func_def.src,
+        source_code=postprocessed_pred_func_def.src,
         locals=locals,
         globals=globals,
         symbol_defs=SymbolNamespace([*thetas, *etas, *epsilons, *cmts, *colvars]),
         module_cls=mod.__class__,
     )
-    pred_func_def = pred_func_def.apply_transform(autodiff_transformer)
-    logger.debug(
-        "[MTran::distill] Automatic gradient transpile result: %s",
-        pred_func_def.src,
+    postprocessed_pred_func_def = postprocessed_pred_func_def.apply_transform(
+        autodiff_transformer
     )
+    logger.debug(
+        "[MTran::distill] Postprocess finished",
+        postprocessed_pred_func_def.src,
+    )
+    # endregion
 
     return ModuleDistillation(
         _o=mod,
+        preprocessed_pred=preprocessed_pred_func_def,
+        postprocessed_pred=postprocessed_pred_func_def,
         thetas=thetas,
         etas=etas,
         epsilons=epsilons,
         colvars=colvars,
-        colvar_collections=colvar_collections,
+        # colvar_collections=colvar_collections,
         cmts=cmts,
         sharedvars=sharedvars,
         globals=globals,
@@ -285,4 +317,5 @@ def distill(mod: Module, src: str | None = None) -> ModuleDistillation:
         defdose_cmt=defdose_cmt,
         defobs_cmt=defobs_cmt,
         locals=locals,
+        docstring=docstring,
     )

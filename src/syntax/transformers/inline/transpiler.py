@@ -1,6 +1,6 @@
 import inspect
 from dataclasses import dataclass
-from typing import Any, Callable, Protocol, Sequence, TypeVar
+from typing import Any, Protocol, Sequence
 
 import libcst as cst
 from libcst.metadata import (
@@ -13,34 +13,12 @@ from libcst.metadata import (
 from sympy.core.function import FunctionClass
 
 from syntax.eval import eval_token
+from syntax.transformers.inline.flags import (
+    InlineTranspileStageLiteralType,
+    should_inline_transpile,
+)
 
 __all__ = ["InlineFunctionTranspiler"]
-
-CallableT = TypeVar("CallableT", bound=Callable)
-
-
-def do_not_inline_transpile(func: CallableT) -> CallableT:
-    """
-    A decorator to mark a function for inline transpilation.
-
-    This decorator can be used to mark functions that should be inlined
-    during the transpilation process. It does not modify the function itself.
-    """
-    setattr(func, "_do_not_inline_transpile", True)
-    return func
-
-
-def is_do_not_inline_transpile(func: Callable) -> bool:
-    """
-    Check if a function is marked for inline transpilation.
-
-    Args:
-        func (CallableT): The function to check.
-
-    Returns:
-        bool: True if the function is marked for inline transpilation, False otherwise.
-    """
-    return getattr(func, "_do_not_inline_transpile", False)
 
 
 class Mangler(Protocol):
@@ -82,8 +60,11 @@ class LocalVariableMangler(cst.CSTTransformer):
         self._names: list[str] = []
 
     def visit_Name(self, node: cst.Name):
-        context = self.get_metadata(ExpressionContextProvider, node)
+        context = self.get_metadata(ExpressionContextProvider, node, None)
         if context == ExpressionContext.STORE:
+            if node.value == "self":
+                # Do not rename 'self' variable
+                return
             if node.value not in self._names:
                 # If the variable is not already renamed, add it to the list
                 # to avoid renaming it again
@@ -142,11 +123,13 @@ class InlineFunctionTranspiler(cst.CSTTransformer):
 
     def __init__(
         self,
+        stage: InlineTranspileStageLiteralType,
         source_code: str,
         locals: dict[str, Any],
         globals: dict[str, Any],
     ):
         super().__init__()
+        self._stage: InlineTranspileStageLiteralType = stage
         self._source_code = source_code
         self._locals = locals
         self._globals = globals
@@ -181,7 +164,7 @@ class InlineFunctionTranspiler(cst.CSTTransformer):
             source_code=self._source_code,
         )
 
-        if is_do_not_inline_transpile(func_):
+        if not should_inline_transpile(func_, stage=self._stage):
             # If the function is marked as do not inline, return None
             return None
 
@@ -192,10 +175,14 @@ class InlineFunctionTranspiler(cst.CSTTransformer):
                 to=node.with_changes(func=cst.Name(value=func_name)),
                 body=[],
             )
+        if inspect.isbuiltin(func_):
+            # If the function is a built-in function, we cannot inline it
+            return None
 
         try:
-            func_src = inspect.getsource(func_)
-        except OSError:
+            func_src = inspect.getsource(func_).strip()
+
+        except Exception as _:
             # Bypass if we cannot get the source code
             return None
         module = inspect.getmodule(func_)
@@ -213,6 +200,7 @@ class InlineFunctionTranspiler(cst.CSTTransformer):
 
         # If there are nested function calls in function body, inline them first
         nested_transpiler = InlineFunctionTranspiler(
+            stage=self._stage,
             source_code=func_src,
             locals=_locals,
             globals=self._globals,
@@ -255,7 +243,6 @@ class InlineFunctionTranspiler(cst.CSTTransformer):
             if index == 0 and params.params[0].name.value == "self":
                 # Skip the first argument if it's 'self'
                 index += 1
-                continue
             if arg.keyword is not None:
                 named_arguments[arg.keyword.value] = arg.value
             else:
@@ -285,31 +272,38 @@ class InlineFunctionTranspiler(cst.CSTTransformer):
                 ),
             )
         func_body = cst.ensure_type(func_def.body, cst.IndentedBlock)
-        for stmt in func_body.body:
-            if (
-                isinstance(stmt, cst.SimpleStatementLine)
-                and len(stmt.body) == 1
-                and isinstance(stmt.body[0], cst.Return)
-            ):
-                # Replace the return statement with the inlined value
-                if stmt.body[0].value is not None:
-                    ret_name = cst.Name(value=rename_("return"))
-                    replacement.to = ret_name
-                    stmts.append(
-                        stmt.with_changes(
-                            body=[
-                                cst.Assign(
-                                    targets=[
-                                        cst.AssignTarget(ret_name),
-                                    ],
-                                    value=stmt.body[0].value,
-                                )
-                            ]
+        for index, stmt in enumerate(func_body.body):
+            if isinstance(stmt, cst.SimpleStatementLine):
+                # special cases
+                # is docstring
+                if (
+                    index == 0
+                    and isinstance(stmt.body[0], cst.Expr)
+                    and isinstance(stmt.body[0].value, cst.SimpleString)
+                ):
+                    # If the first statement is a docstring, we skip
+                    continue
+
+                # is return statement
+                if len(stmt.body) == 1 and isinstance(stmt.body[0], cst.Return):
+                    if stmt.body[0].value is not None:
+                        ret_name = cst.Name(value=rename_("return"))
+                        replacement.to = ret_name
+                        stmts.append(
+                            stmt.with_changes(
+                                body=[
+                                    cst.Assign(
+                                        targets=[
+                                            cst.AssignTarget(ret_name),
+                                        ],
+                                        value=stmt.body[0].value,
+                                    )
+                                ]
+                            )
                         )
-                    )
-            else:
-                # Add the body statement to the list
-                stmts.append(stmt)
+                        continue
+            # Add the body statement to the list
+            stmts.append(stmt)
         replacement.body = stmts
         return replacement
 

@@ -1,13 +1,27 @@
 import sympy
 
-from typings import Expression, ValueType
+from syntax.transformers.inline.flags import never_inline_transpile
+from typings import Expression
 
-
-def _ensure_expr(expr: Expression) -> sympy.Expr:
-    if isinstance(expr, ValueType):
-        return sympy.Number(expr)
-    else:
-        return expr
+__all__ = [
+    "abs",
+    "floor",
+    "ceiling",
+    "sqrt",
+    "exp",
+    "log",
+    "ln",
+    "log10",
+    "sin",
+    "cos",
+    "tan",
+    "asin",
+    "acos",
+    "atan",
+    "sinh",
+    "cosh",
+    "tanh",
+]
 
 
 def abs(expr: Expression) -> sympy.Expr:
@@ -27,7 +41,7 @@ def abs(expr: Expression) -> sympy.Expr:
     >>> abs(x)
     abs(x)
     """
-    return sympy.Abs(_ensure_expr(expr))
+    return sympy.Abs(expr)
 
 
 def floor(expr: Expression) -> sympy.Expr:
@@ -51,7 +65,7 @@ def floor(expr: Expression) -> sympy.Expr:
     >>> floor(-1.2)
     -2
     """
-    return sympy.floor(_ensure_expr(expr))
+    return sympy.floor(expr)
 
 
 def ceiling(expr: Expression) -> sympy.Expr:
@@ -77,7 +91,7 @@ def ceiling(expr: Expression) -> sympy.Expr:
     >>> ceiling(-1.7)
     -1
     """
-    return sympy.ceiling(_ensure_expr(expr))
+    return sympy.ceiling(expr)
 
 
 def sqrt(expr: Expression) -> sympy.Expr:
@@ -112,7 +126,7 @@ def exp(expr: Expression) -> sympy.Expr:
     >>> exp(x).diff(x)
     exp(x)
     """
-    return sympy.exp(_ensure_expr(expr))
+    return sympy.exp(expr)
 
 
 def log(expr: Expression) -> sympy.Expr:
@@ -130,7 +144,7 @@ def log(expr: Expression) -> sympy.Expr:
     >>> log(E)
     1
     """
-    return sympy.log(_ensure_expr(expr))
+    return sympy.log(expr)
 
 
 def ln(expr: Expression) -> sympy.Expr:
@@ -166,7 +180,7 @@ def log10(expr: Expression) -> sympy.Expr:
     >>> log10(10)
     1
     """
-    return sympy.log(_ensure_expr(expr), sympy.Number(10))
+    return sympy.log(expr, sympy.Number(10))
 
 
 # endregion
@@ -195,7 +209,7 @@ def sin(expr: Expression) -> sympy.Expr:
     >>> sin(sympy.pi / 2)
     1
     """
-    return sympy.sin(_ensure_expr(expr))
+    return sympy.sin(expr)
 
 
 def cos(expr: Expression) -> sympy.Expr:
@@ -219,7 +233,7 @@ def cos(expr: Expression) -> sympy.Expr:
     >>> cos(sympy.pi)
     -1
     """
-    return sympy.cos(_ensure_expr(expr))
+    return sympy.cos(expr)
 
 
 def tan(expr: Expression) -> sympy.Expr:
@@ -243,7 +257,7 @@ def tan(expr: Expression) -> sympy.Expr:
     >>> tan(sympy.pi / 4)
     1
     """
-    return sympy.tan(_ensure_expr(expr))
+    return sympy.tan(expr)
 
 
 def asin(expr: Expression) -> sympy.Expr:
@@ -267,7 +281,7 @@ def asin(expr: Expression) -> sympy.Expr:
     >>> asin(1)
     pi/2
     """
-    return sympy.asin(_ensure_expr(expr))
+    return sympy.asin(expr)
 
 
 def acos(expr: Expression) -> sympy.Expr:
@@ -291,7 +305,7 @@ def acos(expr: Expression) -> sympy.Expr:
     >>> acos(0)
     pi/2
     """
-    return sympy.acos(_ensure_expr(expr))
+    return sympy.acos(expr)
 
 
 def atan(expr: Expression) -> sympy.Expr:
@@ -315,7 +329,7 @@ def atan(expr: Expression) -> sympy.Expr:
     >>> atan(1)
     pi/4
     """
-    return sympy.atan(_ensure_expr(expr))
+    return sympy.atan(expr)
 
 
 def sinh(expr: Expression) -> sympy.Expr:
@@ -337,7 +351,7 @@ def sinh(expr: Expression) -> sympy.Expr:
     >>> sinh(0)
     0
     """
-    return sympy.sinh(_ensure_expr(expr))
+    return sympy.sinh(expr)
 
 
 def cosh(expr: Expression) -> sympy.Expr:
@@ -359,7 +373,7 @@ def cosh(expr: Expression) -> sympy.Expr:
     >>> cosh(0)
     1
     """
-    return sympy.cosh(_ensure_expr(expr))
+    return sympy.cosh(expr)
 
 
 def tanh(expr: Expression) -> sympy.Expr:
@@ -381,7 +395,12 @@ def tanh(expr: Expression) -> sympy.Expr:
     >>> tanh(0)
     0
     """
-    return sympy.tanh(_ensure_expr(expr))
+    return sympy.tanh(expr)
 
 
 # endregion
+
+
+# mark all functions as never inline transpile
+for func in __all__:
+    globals()[func] = never_inline_transpile(globals()[func])

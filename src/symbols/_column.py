@@ -303,128 +303,128 @@ def _column_impl(
         return StrCategoricalColVar(name=col_name, col_name=col_name)
 
 
-@typing.overload
-def multicolumn(
-    col_name: list[str],
-    dtype: typing.Literal["numeric"] = "numeric",
-    *,
-    is_categorical: typing.Literal[False] = False,
-) -> NumericContinuousColVarCollection:
-    """Create a variable to represent a list of columns containing numeric continuous data.
+# @typing.overload
+# def multicolumn(
+#     col_name: list[str],
+#     dtype: typing.Literal["numeric"] = "numeric",
+#     *,
+#     is_categorical: typing.Literal[False] = False,
+# ) -> NumericContinuousColVarCollection:
+#     """Create a variable to represent a list of columns containing numeric continuous data.
 
-    Parameters
-    ----------
-    col_name : list[str]
-        A list of column names for the columns to be represented.
-    dtype : Literal["numeric"], optional
-        Type of data in the columns. Defaults to `"numeric"`.
-    is_categorical : Literal[False], optional
-        Whether the data in the columns are categorical. Defaults to `False`.
+#     Parameters
+#     ----------
+#     col_name : list[str]
+#         A list of column names for the columns to be represented.
+#     dtype : Literal["numeric"], optional
+#         Type of data in the columns. Defaults to `"numeric"`.
+#     is_categorical : Literal[False], optional
+#         Whether the data in the columns are categorical. Defaults to `False`.
 
-    Returns
-    -------
-    NumericContinuousColVarCollection
-        A variable represents multiple columns.
+#     Returns
+#     -------
+#     NumericContinuousColVarCollection
+#         A variable represents multiple columns.
 
-    Examples
-    --------
-    Create a variable represents the "WEIGHT" and "AGE" column:
+#     Examples
+#     --------
+#     Create a variable represents the "WEIGHT" and "AGE" column:
 
-    >>>    class TestModel(Module):
-    >>>        def __init__(self) -> None:
-    >>>            super().__init__()
-    >>>            ...
-    >>>            self.con_cov = multicolumn(["WEIGHT", "AGE"])
-    """
-    ...
-
-
-@typing.overload
-def multicolumn(
-    col_name: list[str],
-    dtype: typing.Literal["numeric"] = "numeric",
-    *,
-    is_categorical: typing.Literal[True],
-) -> NumericCategoricalColVarCollection:
-    """Create a variable to represent a list of columns containing numeric categorical data.
-
-    Parameters
-    ----------
-    col_name : list[str]
-        A list of column names for the columns to be represented.
-    dtype : Literal["numeric"], optional
-        Type of data in the columns. Defaults to `"numeric"`.
-    is_categorical : Literal[True], optional
-        Whether the data in the columns are categorical. Defaults to `True`.
-
-    Returns
-    -------
-    NumericCategoricalColVarCollection
-        A variable represents multiple columns.
-
-    Examples
-    --------
-    Create a variable represents the "GROUP" and "DOSE" column:
-
-    >>>    class TestModel(Module):
-    >>>        def __init__(self) -> None:
-    >>>            super().__init__()
-    >>>            ...
-    >>>            self.cat_cov = multicolumn(["GROUP", "DOSE"], is_categorical=True)
-    """
-    ...
+#     >>>    class TestModel(Module):
+#     >>>        def __init__(self) -> None:
+#     >>>            super().__init__()
+#     >>>            ...
+#     >>>            self.con_cov = multicolumn(["WEIGHT", "AGE"])
+#     """
+#     ...
 
 
-@typing.overload
-def multicolumn(
-    col_name: list[str],
-    dtype: typing.Literal["str"],
-    *,
-    is_categorical: typing.Literal[True] = True,
-) -> StrCategoricalColVarCollection:
-    """Create a variable to represent a list of columns containing string data.
+# @typing.overload
+# def multicolumn(
+#     col_name: list[str],
+#     dtype: typing.Literal["numeric"] = "numeric",
+#     *,
+#     is_categorical: typing.Literal[True],
+# ) -> NumericCategoricalColVarCollection:
+#     """Create a variable to represent a list of columns containing numeric categorical data.
 
-    Parameters
-    ----------
-    col_name : list[str]
-        A list of column names for the columns to be represented.
-    dtype : Literal["str"], optional
-        Type of data in the columns. Defaults to `"str"`.
+#     Parameters
+#     ----------
+#     col_name : list[str]
+#         A list of column names for the columns to be represented.
+#     dtype : Literal["numeric"], optional
+#         Type of data in the columns. Defaults to `"numeric"`.
+#     is_categorical : Literal[True], optional
+#         Whether the data in the columns are categorical. Defaults to `True`.
 
-    Returns
-    -------
-    StrCategoricalColVarCollection
-        A variable represents multiple columns.
+#     Returns
+#     -------
+#     NumericCategoricalColVarCollection
+#         A variable represents multiple columns.
 
-    Examples
-    --------
-    Create a variable represents the "SEX" and "NAME" column:
+#     Examples
+#     --------
+#     Create a variable represents the "GROUP" and "DOSE" column:
 
-    >>>    class TestModel(Module):
-    >>>        def __init__(self) -> None:
-    >>>            super().__init__()
-    >>>            ...
-    >>>            self.str_cov = multicolumn(["SEX", "NAME"], dtype="str")
-    """
-    ...
+#     >>>    class TestModel(Module):
+#     >>>        def __init__(self) -> None:
+#     >>>            super().__init__()
+#     >>>            ...
+#     >>>            self.cat_cov = multicolumn(["GROUP", "DOSE"], is_categorical=True)
+#     """
+#     ...
 
 
-def multicolumn(
-    col_name: list[str],
-    dtype: ColumnDtypeLiteral = "numeric",
-    *,
-    is_categorical: bool = False,
-) -> (
-    NumericContinuousColVarCollection
-    | NumericCategoricalColVarCollection
-    | StrCategoricalColVarCollection
-):
-    return ColVarCollection(  # pyright: ignore[reportReturnType]
-        name="_unnamed_multicolumn",
-        dtype=dtype,
-        is_categorical=is_categorical,
-        collection=[
-            _column_impl(col_name=_col_name, dtype=dtype, is_categorical=is_categorical)
-            for _col_name in col_name
-        ],
-    )
+# @typing.overload
+# def multicolumn(
+#     col_name: list[str],
+#     dtype: typing.Literal["str"],
+#     *,
+#     is_categorical: typing.Literal[True] = True,
+# ) -> StrCategoricalColVarCollection:
+#     """Create a variable to represent a list of columns containing string data.
+
+#     Parameters
+#     ----------
+#     col_name : list[str]
+#         A list of column names for the columns to be represented.
+#     dtype : Literal["str"], optional
+#         Type of data in the columns. Defaults to `"str"`.
+
+#     Returns
+#     -------
+#     StrCategoricalColVarCollection
+#         A variable represents multiple columns.
+
+#     Examples
+#     --------
+#     Create a variable represents the "SEX" and "NAME" column:
+
+#     >>>    class TestModel(Module):
+#     >>>        def __init__(self) -> None:
+#     >>>            super().__init__()
+#     >>>            ...
+#     >>>            self.str_cov = multicolumn(["SEX", "NAME"], dtype="str")
+#     """
+#     ...
+
+
+# def multicolumn(
+#     col_name: list[str],
+#     dtype: ColumnDtypeLiteral = "numeric",
+#     *,
+#     is_categorical: bool = False,
+# ) -> (
+#     NumericContinuousColVarCollection
+#     | NumericCategoricalColVarCollection
+#     | StrCategoricalColVarCollection
+# ):
+#     return ColVarCollection(  # pyright: ignore[reportReturnType]
+#         name="_unnamed_multicolumn",
+#         dtype=dtype,
+#         is_categorical=is_categorical,
+#         collection=[
+#             _column_impl(col_name=_col_name, dtype=dtype, is_categorical=is_categorical)
+#             for _col_name in col_name
+#         ],
+#     )

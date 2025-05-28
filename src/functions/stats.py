@@ -2,6 +2,8 @@ import typing
 
 from sympy import Expr, exp
 
+from syntax.transformers.inline.flags import when_inline_transpile
+
 exp1 = exp
 
 
@@ -11,6 +13,7 @@ def normal_cdf(x: Expr) -> Expr: ...
 def normal_cdf(x: float) -> float: ...
 
 
+@when_inline_transpile("postprocess")
 def normal_cdf(x: Expr | float) -> Expr | float:
     A1 = 0.31938153
     A2 = -0.356563782

@@ -1,11 +1,14 @@
-from sympy import exp
-
-from module.defs.ode import OdeModule
+from api import (
+    OdeModule,
+    column,
+    compartment,
+    exp,
+    likelihood,
+    normal_cdf,
+    omega,
+    theta,
+)
 from module.descriptor.distill import distill
-from symbols._column import column
-from symbols._ode import compartment
-from symbols._omega_eta import omega
-from symbols._theta import theta
 from utils.loggings import logger
 
 logger.setLevel("DEBUG")
@@ -39,10 +42,10 @@ class MyDef(OdeModule):
         self.cmt1.alag = -k
         self.cmt2.init_value = -ka
         IPRED = self.cmt2.A / v
-        # if IPRED < 0:
-        #     RES = self.DV - IPRED
-        #     CUM = normal_cdf(RES)
-        #     return likelihood(CUM)
+        if IPRED < 0:
+            RES = self.DV - IPRED
+            CUM = normal_cdf(RES)
+            return likelihood(CUM)
 
         return IPRED
 

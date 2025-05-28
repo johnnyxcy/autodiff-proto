@@ -5,53 +5,22 @@ from typing import Literal, overload
 import libcst as cst
 from sympy import Expr, Symbol
 
-from syntax.transformers.inline_func_transpile import do_not_inline_transpile
+from syntax.transformers.inline_func_transpile import never_inline_transpile
 from typings import AsCSTExpression
 
 YTypeLiteral = Literal["prediction", "likelihood", "-2loglikelihood"]
 
 
-class YValue(Symbol):
+class Y(Symbol, AsCSTExpression):
     """
-    A class to represent a return value Y.
+    A class to represent a return value Y with a specific name.
 
     It can be used to represent a variable that is a return value of a function.
     """
 
-    __slots__ = ("_expr", "_y")
-
-    def __new__(cls, y: Y, expr: Expr) -> YValue:
-        self_ = super().__new__(cls, "__Yvalue__")
-        self_._y = y
-        self_._expr = expr
-        return self_
-
-    @property
-    def expr(self) -> Expr:
-        return self._expr
-
-    @property
-    def y(self) -> Y:
-        return self._y
-
-
-class Y(Symbol, AsCSTExpression):
-    """
-    A class to represent a return value Y.
-
-    It can be used to represent a variable that is a return value of a function, with a flag indicating its type (prediction/likelihood).
-    """
-
-    __slots__ = ("_type",)
-
-    def __new__(cls, type: YTypeLiteral) -> Y:
+    def __new__(cls) -> Y:
         self_ = super().__new__(cls, "__Y__")
-        self_._type = type
         return self_
-
-    @property
-    def type(self) -> YTypeLiteral:
-        return self._type
 
     def as_cst_expression(self):
         """
@@ -60,17 +29,32 @@ class Y(Symbol, AsCSTExpression):
         return cst.Subscript(
             value=cst.Name(YTransRack.name),
             slice=[
-                cst.SubscriptElement(
-                    cst.Index(value=cst.SimpleString(value='"' + self.type + '"'))
-                ),
+                cst.SubscriptElement(cst.Slice(lower=None, upper=None, step=None)),
             ],
         )
 
-    def __call__(self, expr: Expr) -> YValue:
+
+class YType(Symbol, AsCSTExpression):
+    """
+    A class to represent a return value Y with a specific name.
+
+    It can be used to represent a variable that is a return value of a function.
+    """
+
+    def __new__(cls) -> Y:
+        self_ = super().__new__(cls, "__Ytype__")
+        return self_
+
+    def as_cst_expression(self):
         """
-        Call the Y object with an expression to create a YValue.
+        Convert the Y object to a CST expression.
         """
-        return YValue(y=self, expr=expr)
+        return cst.Subscript(
+            value=cst.Name(YTransRack.name),
+            slice=[
+                cst.SubscriptElement(cst.Index(cst.Name("type"))),
+            ],
+        )
 
 
 class YWrt(Symbol, AsCSTExpression):
@@ -131,39 +115,77 @@ class YTransRack:
     name = "__Y__"
 
     @overload
-    def __getitem__(self, __type: YTypeLiteral) -> Y: ...
+    def __getitem__(self, __slice: slice[None, None, None]) -> Y: ...
+    @overload
+    def __getitem__(self, __type: type) -> YType: ...
     @overload
     def __getitem__(self, __wrt: Symbol, __wrt2nd: Symbol | None = None) -> YWrt: ...
 
     def __getitem__(
         self,
-        __arg0: Symbol | YTypeLiteral,
+        __arg0: Symbol | type | slice[None, None, None],
         __arg1: Symbol | None = None,
-    ) -> Y | YWrt:
+    ) -> Y | YType | YWrt:
         """
         Get the x_wrt expression for the given variable and wrt.
         """
-        if isinstance(__arg0, str):
-            return Y(__arg0)
+        if isinstance(__arg0, slice):
+            return Y()
+        elif isinstance(__arg0, type):
+            return YType()
         else:
             return YWrt(__arg0, __arg1)
 
 
-@do_not_inline_transpile
+class YValue(Expr):
+    """
+    A class to represent a return value Y with a specific value.
+    It can be used to represent a variable that is a return value of a function.
+    """
+
+    __slots__ = ("_expr", "_type")
+
+    def __new__(cls, expr: Expr, type: YTypeLiteral) -> YValue:
+        self_ = super().__new__(cls)
+        self_._expr = expr
+        self_._type = type
+        return self_
+
+    @property
+    def expr(self) -> Expr:
+        return self._expr
+
+    @property
+    def type(self) -> YTypeLiteral:
+        return self._type
+
+    @property
+    def flag(self) -> Literal[0, 1, 2]:
+        if self._type == "prediction":
+            return 0
+        elif self._type == "likelihood":
+            return 1
+        elif self._type == "-2loglikelihood":
+            return 2
+        else:
+            raise ValueError(f"Unknown YValue type: {self._type}")
+
+
+@never_inline_transpile
 def prediction(expr: Expr) -> Expr:
     """
     Mark the return value as prediction.
     """
-    return Y("prediction")(expr)
+    return YValue(expr, "prediction")
 
 
-@do_not_inline_transpile
+@never_inline_transpile
 def likelihood(expr: Expr, transform: Literal["-2log", False] = False) -> Expr:
     """
     Mark the return value as likelihood.
     If transform is "-2log", it will be marked as -2log likelihood.
     """
     if transform == "-2log":
-        return Y("-2loglikelihood")(expr)
+        return YValue(expr, "-2loglikelihood")
     else:
-        return Y("likelihood")(expr)
+        return YValue(expr, "likelihood")

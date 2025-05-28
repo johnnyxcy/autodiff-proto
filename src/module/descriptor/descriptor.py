@@ -21,3 +21,5 @@ class ModuleDescriptor:
     trans: int
     defdose_cmt: int
     defobs_cmt: int
+
+    docstring: str | None = None

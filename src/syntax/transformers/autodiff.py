@@ -44,7 +44,7 @@ from symbols._ode import (
     CmtSolvedAWrt,
 )
 from symbols._x import XWrt
-from symbols._y import Y, YTypeLiteral, YValue, YWrt
+from symbols._y import Y, YType, YTypeLiteral, YValue, YWrt
 from symbols.sympy_parser import parse_sympy_expr
 from syntax.metadata.scope_provider import (
     Scope,
@@ -642,20 +642,30 @@ class AutoDiffTransformer(cst.CSTTransformer):
 
         y_type: YTypeLiteral = "prediction"
         if isinstance(evaluated_value, YValue):
-            y_type = evaluated_value.y.type
+            y_type = evaluated_value.type
             evaluated_value = evaluated_value.expr
 
-        transformed.append(
-            cst.SimpleStatementLine(
-                body=[
-                    cst.Assign(
-                        targets=[
-                            cst.AssignTarget(target=Y(y_type).as_cst_expression())
-                        ],
-                        value=parse_sympy_expr(evaluated_value),
-                    )
-                ]
-            )
+        transformed.extend(
+            [
+                cst.SimpleStatementLine(
+                    body=[
+                        cst.Assign(
+                            targets=[
+                                cst.AssignTarget(target=YType().as_cst_expression())
+                            ],
+                            value=cst.SimpleString(value=f'"{y_type}"'),
+                        )
+                    ]
+                ),
+                cst.SimpleStatementLine(
+                    body=[
+                        cst.Assign(
+                            targets=[cst.AssignTarget(target=Y().as_cst_expression())],
+                            value=parse_sympy_expr(evaluated_value),
+                        )
+                    ]
+                ),
+            ]
         )
 
         first_order_body: list[cst.BaseStatement] = []
