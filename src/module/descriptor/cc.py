@@ -9,7 +9,7 @@ from libcst.metadata import (
     ParentNodeProvider,
 )
 from pandas.api.types import is_float_dtype, is_integer_dtype
-from sympy import Add, Basic, Expr, Mul, Number, Pow, Symbol, exp, parse_expr
+from sympy import Add, Basic, Mul, Number, Pow, Symbol, exp, parse_expr
 from sympy.core.relational import (
     Equality,
     GreaterThan,

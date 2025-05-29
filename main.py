@@ -1,5 +1,4 @@
 from api import (
-    EvOneCmtLinear,
     OdeModule,
     column,
     compartment,

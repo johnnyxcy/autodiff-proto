@@ -10,7 +10,7 @@ from module.closed_form_solutions import get_qualname
 from module.defs.closed_form import ClosedFormSolutionModule, get_annotated_meta
 from module.defs.module import Module
 from module.defs.ode import OdeModule, get_solver
-from module.descriptor.common import ModuleClassTypeLiteral, SrcEncapsulation
+from module.descriptor.common import SrcEncapsulation
 from module.descriptor.descriptor import ModuleDescriptor
 from symbols._cmt import Compartment
 from symbols._column import ColVar
