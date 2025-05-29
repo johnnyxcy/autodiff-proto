@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import builtins
 import enum
 from typing import Any, Literal, Sequence, overload
 
@@ -10,7 +9,7 @@ from libcst.metadata import (
     ParentNodeProvider,
 )
 from pandas.api.types import is_float_dtype, is_integer_dtype
-from sympy import Expr, Symbol, parse_expr
+from sympy import Add, Basic, Expr, Mul, Number, Pow, Symbol, exp, parse_expr
 from sympy.parsing.sympy_parser import auto_symbol
 
 from __version__ import __version__
@@ -24,6 +23,18 @@ from symbols._closed_form import (
     ClosedFormSolutionTransRack,
     ClosedFormSolveCall,
 )
+from symbols._cmt import (
+    CmtDADt,
+    CmtDADtTransRack,
+    CmtDADtWrt,
+    CmtParamArg,
+    CmtParamArgTransRack,
+    CmtParamArgWrt,
+    CmtSolvedA,
+    CmtSolvedATransRack,
+    CmtSolvedAWrt,
+    Compartment,
+)
 from symbols._omega_eta import Eta
 from symbols._sigma_eps import Eps
 from symbols._x import X, XTransRack, XWrt
@@ -36,7 +47,6 @@ from syntax.unparse import unparse
 MSYMTAB_VARNAME = "__msymtab"
 LOCALS_VARNAME = "__locals"
 PRED_CONTEXT_VARNAME = "__ctx"
-DADT_WRT_A_VARNAME = "__DA"
 CLOSED_FORM_SOLUTION_VARNAME = ClosedFormSolutionTransRack.name
 
 
@@ -214,20 +224,27 @@ class CCTransPredVisitor(cst.CSTVisitor):
         self._advan_type, self._trans_type = advan_trans
         self._namer = ArbitraryVariableNamer()
 
+        self._declarations: dict[str, ValueType] = {}
+
         self._locals = {
             **self._descriptor.locals,
             XTransRack.name: XTransRack(),
             YTransRack.name: YTransRack(),
-            ParamArgTransRack.name: ParamArgTransRack(),
             FIRST_ORDER.name: FIRST_ORDER,
             SECOND_ORDER.name: SECOND_ORDER,
         }
 
         if self._descriptor.is_closed_form_solution:
+            self._locals[ParamArgTransRack.name] = ParamArgTransRack()
             self._locals[ClosedFormSolutionTransRack.name] = (
                 ClosedFormSolutionTransRack()
             )
             self._locals[ClosedFormSolveCall.name] = ClosedFormSolveCall()
+
+        if self._descriptor.class_type == "OdeModule":
+            self._locals[CmtParamArgTransRack.name] = CmtParamArgTransRack()
+            self._locals[CmtDADtTransRack.name] = CmtDADtTransRack()
+            self._locals[CmtSolvedATransRack.name] = CmtSolvedATransRack()
 
     def visit_FunctionDef(self, node):
         if node.name.value != "pred":
@@ -236,14 +253,79 @@ class CCTransPredVisitor(cst.CSTVisitor):
                 node,
                 self._source_code,
             )
-        self._translated.append(
-            f"Result<void> __pred(PredContext* {PRED_CONTEXT_VARNAME})"
-        )
-        self._translated.append("{")
 
     def leave_FunctionDef(self, original_node: cst.FunctionDef):
-        self._translated.append("}")
-        return None
+        _returns: list[str] = []
+        scope = self.get_metadata(ScopeProvider, original_node.body, None)
+        if scope is None:
+            return
+        _returns.extend(
+            [
+                "__return:",
+                "{",
+                f"if ({LOCALS_VARNAME} != nullptr)",
+                "{",
+            ]
+        )
+        for assignment in scope.assignments:
+            name = assignment.name
+            if name == "self":
+                continue
+            if name.startswith("__"):
+                continue  # skip private variables
+            _returns.append(f'(*{LOCALS_VARNAME}->dlocals)["{name}"] = {name};')
+
+        # 导出共享变量
+        for sharedvar in self._descriptor.sharedvars:
+            _returns.append(
+                f'(*{LOCALS_VARNAME}->dlocals)["{sharedvar.name}"] = {mask_self_attr(sharedvar.name)};'
+            )
+
+        _returns.extend(
+            [
+                "}",
+                "return Ok();",
+                "}",
+            ]
+        )
+
+        # declarations
+        declarations: list[str] = []
+        for name, value_type in self._declarations.items():
+            if value_type.is_ptr():
+                declarations.append(f"{value_type.to_cc_type()} {name} = nullptr;")
+            elif value_type.is_numeric():
+                declarations.append(f"double {name} = 0.;")
+            elif value_type == ValueType.VALUE_TYPE_STRING:
+                declarations.append(f'std::string {name} = "";')
+            else:
+                rethrow(
+                    NotImplementedError(f"Unsupported value type: {value_type}"),
+                    original_node,
+                    self._source_code,
+                )
+
+        self._translated = [
+            f"Result<void> __pred(PredContext* {PRED_CONTEXT_VARNAME})",
+            "{",
+            "// #region Declarations",
+            f"__SymbolTable* {MSYMTAB_VARNAME} = reinterpret_cast<__SymbolTable*>({PRED_CONTEXT_VARNAME}->symtab);",
+            f"Locals* {LOCALS_VARNAME} = {PRED_CONTEXT_VARNAME}->locals;",
+            *self.__retrieve_theta_from_self(),
+            *self.__retrieve_etas_from_self(),
+            *self.__retrieve_eps_from_self(),
+            *declarations,
+            "// #endregion",
+            "",
+            "// #region Body",
+            *self._translated,
+            "// #endregion",
+            "",
+            "// #region Return",
+            *_returns,
+            "// #endregion",
+            "}",
+        ]
 
     def visit_SimpleStatementLine(self, node: cst.SimpleStatementLine):
         translated: list[str] = []
@@ -310,19 +392,24 @@ class CCTransPredVisitor(cst.CSTVisitor):
         target_expr = assign_targets[0].target
         lhs = self._eval(target_expr)
         left_type: ValueType
+        lhs_is_name = False
         if isinstance(lhs, XWrt):
             left = self._namer.get_name(lhs)
+            lhs_is_name = True
             left_type = ValueType.VALUE_TYPE_DOUBLE
         elif isinstance(lhs, ParamArg | ParamArgWrt):
             if isinstance(lhs, ParamArgWrt):
-                param_name, tuple_indexer = self._compute_param_arg_index(
+                arg_index = self._compute_param_arg_index(
                     lhs.param_name, wrt=lhs.wrt, wrt2nd=lhs.wrt2nd
                 )
             else:
-                param_name, tuple_indexer = self._compute_param_arg_index(
-                    lhs.param_name
-                )
-            if isinstance(lhs, IndexedParamArg):
+                arg_index = self._compute_param_arg_index(lhs.param_name)
+            if arg_index is None:  # not valid, skip
+                return None
+            param_name, tuple_indexer = arg_index
+            if isinstance(lhs, CmtParamArg | CmtParamArgWrt):
+                left = f"{mask_self_attr(lhs.cmt.name)}->{lhs.param_name}({tuple_indexer[0]}, {tuple_indexer[1]})"
+            elif isinstance(lhs, IndexedParamArg):
                 dosing_ = (
                     f"({PRED_CONTEXT_VARNAME}->pk->solve_ctx->dosing->{param_name})"
                 )
@@ -340,9 +427,21 @@ class CCTransPredVisitor(cst.CSTVisitor):
             left = f"{PRED_CONTEXT_VARNAME}->Ytype"
             left_type = ValueType.VALUE_TYPE_INT
         elif isinstance(lhs, YWrt):
-            left = f"{PRED_CONTEXT_VARNAME}->Y[{self._compute_y_index(lhs.wrt, lhs.wrt2nd)}]"
+            index = self._compute_y_index(lhs.wrt, lhs.wrt2nd)
+            if index is None:
+                return None
+            left = f"{PRED_CONTEXT_VARNAME}->Y[{index}]"
             left_type = ValueType.VALUE_TYPE_DOUBLE
+        elif isinstance(lhs, CmtDADt):
+            index = self._compute_ode_index(cmt=lhs.cmt)
+            left_type = ValueType.VALUE_TYPE_DOUBLE
+            left = f"{PRED_CONTEXT_VARNAME}->ode->dAdt[{index}]"
+        elif isinstance(lhs, CmtDADtWrt):
+            index = self._compute_ode_index(cmt=lhs.cmt, wrt=lhs.wrt, wrt2nd=lhs.wrt2nd)
+            left_type = ValueType.VALUE_TYPE_DOUBLE
+            left = f"{PRED_CONTEXT_VARNAME}->ode->dAdt[{index}]"
         elif isinstance(lhs, Symbol):  # raw symbol
+            lhs_is_name = True
             left = lhs.name
             left_type = right_type
         else:
@@ -359,7 +458,28 @@ class CCTransPredVisitor(cst.CSTVisitor):
                 self._source_code,
             )
 
+        if lhs_is_name:
+            if left in self._declarations:
+                if not self._declarations[left].can_be_eq_to(right_type):
+                    rethrow(
+                        TypeError(
+                            f"Cannot reassign {left} from {self._declarations[left]} to {right_type}"
+                        ),
+                        node,
+                        self._source_code,
+                    )
+            self._declarations[left] = right_type
+
         self._translated.append(f"{left} = {right};")
+
+    def visit_Return(self, node: cst.Return):
+        if node.value is not None:
+            rethrow(
+                ValueError("`return` statement must not have a value"),
+                node,
+                self._source_code,
+            )
+        self._translated.append("goto __return;")
 
     @property
     def translated(self) -> Sequence[str]:
@@ -367,6 +487,7 @@ class CCTransPredVisitor(cst.CSTVisitor):
 
     def _translate_rhs(self, rhs: cst.BaseExpression) -> tuple[ValueType, str]:
         expr = self._eval(rhs)
+
         if expr == FIRST_ORDER:
             return ValueType.VALUE_TYPE_BOOL, f"{PRED_CONTEXT_VARNAME}->first_order"
         if expr == SECOND_ORDER:
@@ -384,54 +505,76 @@ class CCTransPredVisitor(cst.CSTVisitor):
         if isinstance(expr, bool):
             return ValueType.VALUE_TYPE_BOOL, str(expr).lower()
 
-        if isinstance(expr, Expr) and expr.is_constant():
-            if expr.is_Number:
-                return (
-                    ValueType.VALUE_TYPE_DOUBLE,
-                    str(expr),
-                )
-            elif expr.is_Boolean:
-                return (
-                    ValueType.VALUE_TYPE_BOOL,
-                    str(expr),
-                )
+        if isinstance(expr, Expr):
+            return ValueType.VALUE_TYPE_DOUBLE, self._translate_sympy_expr(expr)
+
+        return ValueType.VALUE_TYPE_DOUBLE, "0.0"
+
+    def _translate_sympy_expr(self, expr: Basic) -> str:
+        """
+        Translate a sympy expression to C++ code.
+        """
+        if isinstance(expr, Number):
+            return str(expr)
 
         if isinstance(expr, ClosedFormSolutionSolvedF):
-            return (
-                ValueType.VALUE_TYPE_DOUBLE,
-                f"{CLOSED_FORM_SOLUTION_VARNAME}.F()",
-            )
+            return f"{CLOSED_FORM_SOLUTION_VARNAME}.F()"
         if isinstance(expr, ClosedFormSolutionSolvedFWrt):
             if isinstance(expr.wrt, Eta):
                 eta_index = self._descriptor.etas.index(expr.wrt)
-                return (
-                    ValueType.VALUE_TYPE_DOUBLE,
-                    f"{CLOSED_FORM_SOLUTION_VARNAME}.F({eta_index})",
-                )
+                return f"{CLOSED_FORM_SOLUTION_VARNAME}.F({eta_index})"
 
         if isinstance(expr, ClosedFormSolutionSolvedA):
-            return (
-                ValueType.VALUE_TYPE_DOUBLE,
-                f"{CLOSED_FORM_SOLUTION_VARNAME}.A({expr.index})",
-            )
+            return f"{CLOSED_FORM_SOLUTION_VARNAME}.A({expr.index})"
         if isinstance(expr, ClosedFormSolutionSolvedAWrt):
             if isinstance(expr.wrt, Eta):
                 eta_index = self._descriptor.etas.index(expr.wrt)
-                return (
-                    ValueType.VALUE_TYPE_DOUBLE,
-                    f"{CLOSED_FORM_SOLUTION_VARNAME}.A({expr.index, eta_index})",
-                )
+                return f"{CLOSED_FORM_SOLUTION_VARNAME}.A({expr.index, eta_index})"
+
+        if isinstance(expr, CmtDADtWrt):
+            index = self._compute_ode_index(
+                cmt=expr.cmt, wrt=expr.wrt, wrt2nd=expr.wrt2nd
+            )
+            return f"{PRED_CONTEXT_VARNAME}->ode->dAdt[{index}]"
+
+        if isinstance(expr, CmtSolvedA):
+            index = self._compute_ode_index(cmt=expr.cmt)
+            return f"{PRED_CONTEXT_VARNAME}->ode->A[{index}]"
+
+        if isinstance(expr, CmtSolvedAWrt):
+            index = self._compute_ode_index(
+                cmt=expr.cmt, wrt=expr.wrt, wrt2nd=expr.wrt2nd
+            )
+            return f"{PRED_CONTEXT_VARNAME}->ode->A[{index}]"
 
         if isinstance(expr, XWrt):
             x_name = self._namer.get_name(expr, create_if_missing=False)
             if x_name is None:
                 x_name = "0.0"
-            return ValueType.VALUE_TYPE_DOUBLE, x_name
+            return x_name
 
         if isinstance(expr, Symbol):
-            return ValueType.VALUE_TYPE_DOUBLE, expr.name
+            for symbol in [
+                *self._descriptor.thetas,
+                *self._descriptor.etas,
+                *self._descriptor.epsilons,
+            ]:
+                if symbol.name == expr.name:
+                    return f"{mask_self_attr(symbol.name)}"
+            return expr.name
+        if isinstance(expr, Add):
+            return " + ".join(self._translate_sympy_expr(arg) for arg in expr.args)
+        if isinstance(expr, Mul):
+            return " * ".join(self._translate_sympy_expr(arg) for arg in expr.args)
+        if isinstance(expr, exp):
+            to = self._translate_sympy_expr(expr.exp)
+            return f"std::exp({to})"
+        if isinstance(expr, Pow):
+            base = self._translate_sympy_expr(expr.base)
+            to = self._translate_sympy_expr(expr.exp)
+            return f"std::pow({base}, {to})"
 
-        return ValueType.VALUE_TYPE_DOUBLE, "0.0"
+        raise NotImplementedError(f"Unsupported expression type: {type(expr)}")
 
     def _compute_y_index(self, wrt: Symbol, wrt2nd: Symbol | None = None) -> int | None:
         n_eta = len(self._descriptor.etas)
@@ -470,7 +613,7 @@ class CCTransPredVisitor(cst.CSTVisitor):
         param_name: str,
         wrt: Symbol | None = None,
         wrt2nd: Symbol | None = None,  # noqa: F821
-    ) -> tuple[str, tuple[int, int]]:
+    ) -> tuple[str, tuple[int, int]] | None:
         if wrt is None and wrt2nd is None:
             return param_name, (0, 0)
 
@@ -483,7 +626,40 @@ class CCTransPredVisitor(cst.CSTVisitor):
         if isinstance(wrt, Eta) and wrt2nd is None:
             return param_name, (1 + self._descriptor.etas.index(wrt), 0)
 
-        raise TypeError("wrt is not valid {0}".format(wrt))
+        return None
+
+    def _compute_ode_index(
+        self,
+        cmt: Compartment,
+        wrt: Symbol | CmtSolvedA | None = None,
+        wrt2nd: Symbol | None = None,
+    ) -> int:
+        n_cmt = len(self._descriptor.cmts)
+        n_eta = len(self._descriptor.etas)
+        cmt_index = self._descriptor.cmts.index(cmt)
+        if wrt is None:
+            return cmt_index
+        elif wrt2nd is None:  # only wrt is given
+            if isinstance(wrt, Eta):
+                eta_index = self._descriptor.etas.index(wrt)
+                return n_cmt + eta_index * n_cmt + cmt_index
+            elif isinstance(wrt, CmtSolvedA):
+                cmt2_index = self._descriptor.cmts.index(wrt.cmt)
+                return cmt_index * n_cmt + cmt2_index
+            else:
+                raise TypeError("wrt is not valid {0}".format(wrt))
+        else:
+            # TODO(@xuchongyi): 做二阶 ode 的时候这个索引要和 Indexer 对齐
+            if isinstance(wrt, Eta) and isinstance(wrt2nd, Eta):
+                comb_index = self._compute_eta_2nd_partial_index(wrt, wrt2nd)
+                if comb_index == -1:
+                    raise IndexError("wrt pair not found")
+
+                return n_cmt + n_cmt * n_eta + comb_index * n_cmt + cmt_index
+            else:
+                raise TypeError(
+                    "wrt and wrt2nd is not valid {0}, {1}".format(wrt, wrt2nd)
+                )
 
     def _compute_eta_2nd_partial_index(self, eta_i: Eta, eta_j: Eta) -> int:
         # 下三角的索引
@@ -519,6 +695,33 @@ class CCTransPredVisitor(cst.CSTVisitor):
             )
 
         return parsed
+
+    def __retrieve_theta_from_self(self) -> list[str]:
+        retrieved_vars: list[str] = []
+        for theta in self._descriptor.thetas:
+            retrieved_vars.append(
+                f"double {mask_self_attr(theta.name)} = {MSYMTAB_VARNAME}->{mask_self_attr(theta.name)};"
+            )
+
+        return retrieved_vars
+
+    def __retrieve_etas_from_self(self) -> list[str]:
+        retrieved_vars: list[str] = []
+        for eta in self._descriptor.etas:
+            retrieved_vars.append(
+                f"double {mask_self_attr(eta.name)} = {MSYMTAB_VARNAME}->{mask_self_attr(eta.name)};"
+            )
+
+        return retrieved_vars
+
+    def __retrieve_eps_from_self(self) -> list[str]:
+        retrieved_vars: list[str] = []
+        for eps in self._descriptor.epsilons:
+            retrieved_vars.append(
+                f"double {mask_self_attr(eps.name)} = {MSYMTAB_VARNAME}->{mask_self_attr(eps.name)};"
+            )
+
+        return retrieved_vars
 
 
 class CCTranslator:

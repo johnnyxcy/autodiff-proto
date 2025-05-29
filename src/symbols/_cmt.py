@@ -251,7 +251,7 @@ class CmtSolvedA(Symbol, AsCSTExpression):
         """
 
         return cst.Subscript(
-            value=cst.Name(CmtSolvedARack.name),
+            value=cst.Name(CmtSolvedATransRack.name),
             slice=[
                 cst.SubscriptElement(
                     slice=cst.Index(
@@ -338,10 +338,10 @@ class CmtSolvedAWrt(Symbol, AsCSTExpression):
                 )
             slice.append(wrt2nd)
 
-        return cst.Subscript(value=cst.Name(CmtSolvedARack.name), slice=slice)
+        return cst.Subscript(value=cst.Name(CmtSolvedATransRack.name), slice=slice)
 
 
-class CmtSolvedARack:
+class CmtSolvedATransRack:
     """
     Representing a dummy getter for the amounts of any arbitrary compartment to be used in MTran.
     """
@@ -1010,37 +1010,48 @@ class CmtParamArgTransRack:
         raise NotImplementedError()
 
     @typing.overload
-    def __getitem__(self, __cmt: Compartment, __name: str) -> CmtParamArg:
+    def __getitem__(self, __key: tuple[Compartment, str]) -> CmtParamArg:
         """Get a parameter argument by its name."""
         ...
 
     @typing.overload
     def __getitem__(
         self,
-        __cmt: Compartment,
-        __name: str,
-        __wrt: Symbol,
-        __wrt2nd: Symbol | None = None,
+        __key: tuple[Compartment, str, Symbol]
+        | tuple[Compartment, str, Symbol, Symbol | None],
     ) -> CmtParamArgWrt:
         """Get a parameter argument derivative with respect to a variable."""
         ...
 
     def __getitem__(
         self,
-        __cmt: Compartment,
-        __name: str,
-        __wrt: Symbol | None = None,
-        __wrt2nd: Symbol | None = None,
+        __key: tuple[Compartment, str]
+        | tuple[Compartment, str, Symbol]
+        | tuple[Compartment, str, Symbol, Symbol | None],
     ) -> CmtParamArg | CmtParamArgWrt:
-        if __wrt is not None:
+        if len(__key) == 2:
+            cmt, name = __key
+            return CmtParamArg(param_name=name, cmt=cmt)
+
+        if len(__key) == 3:
+            cmt, name, wrt = __key
+            return CmtParamArgWrt(param_name=name, cmt=cmt, wrt=wrt)
+
+        if len(__key) == 4:
+            cmt, name, wrt, wrt2nd = __key
             return CmtParamArgWrt(
-                param_name=__name,
-                cmt=__cmt,
-                wrt=__wrt,
-                wrt2nd=__wrt2nd,
+                param_name=name,
+                cmt=cmt,
+                wrt=wrt,
+                wrt2nd=wrt2nd,
             )
-        else:
-            return CmtParamArg(param_name=__name, cmt=__cmt)
+
+        raise ValueError(
+            "Key must be a tuple of length 2, 3, or 4: "
+            "2 for parameter argument, "
+            "3 for first order derivative, "
+            "4 for second order derivative."
+        )
 
 
 def compartment(
