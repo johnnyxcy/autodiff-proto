@@ -50,12 +50,10 @@ class MyDef(OdeModule):
         k = cl / v
         self.cmt1.dAdt = -ka * self.cmt1.A
         self.cmt2.dAdt = ka * self.cmt1.A - k * self.cmt2.A
-        self.cmt1.alag = -k
-        self.cmt2.init_value = -ka
 
         IPRED = self.cmt2.A / v
         if IPRED < 0:
-            RES = add(self.DV, -IPRED)
+            RES = self.DV - IPRED
             CUM = normal_cdf(RES)
             return likelihood(CUM)
 

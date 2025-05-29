@@ -323,6 +323,7 @@ class CCTransPredVisitor(cst.CSTVisitor):
             *self.__retrieve_theta_from_self(),
             *self.__retrieve_etas_from_self(),
             *self.__retrieve_eps_from_self(),
+            *self.__retrieve_colvars_from_self(),
             *declarations,
             "// #endregion",
             "",
@@ -606,6 +607,7 @@ class CCTransPredVisitor(cst.CSTVisitor):
                 *self._descriptor.thetas,
                 *self._descriptor.etas,
                 *self._descriptor.epsilons,
+                *self._descriptor.colvars,
             ]:
                 if symbol.name == expr.name:
                     return f"{mask_self_attr(symbol.name)}"
@@ -765,6 +767,21 @@ class CCTransPredVisitor(cst.CSTVisitor):
         for eps in self._descriptor.epsilons:
             retrieved_vars.append(
                 f"double {mask_self_attr(eps.name)} = {MSYMTAB_VARNAME}->{mask_self_attr(eps.name)};"
+            )
+
+        return retrieved_vars
+
+    def __retrieve_colvars_from_self(self) -> list[str]:
+        retrieved_vars: list[str] = []
+        for colvar in self._descriptor.colvars:
+            if colvar.dtype == "numeric":
+                dtype = "double"
+            elif colvar.dtype == "string":
+                dtype = "std::string"
+            else:
+                raise TypeError(f"Unsupported colvar dtype: {colvar.dtype}")
+            retrieved_vars.append(
+                f"{dtype} {mask_self_attr(colvar.name)} = {MSYMTAB_VARNAME}->{mask_self_attr(colvar.name)};"
             )
 
         return retrieved_vars
