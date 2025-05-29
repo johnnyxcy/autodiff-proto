@@ -12,6 +12,7 @@ from api import (
 from module.defs.ode import odeint
 from module.descriptor.cc import CCTranslator
 from module.descriptor.distillation import distill
+from symbols._sigma_eps import sigma
 from syntax.unparse import unparse
 from utils.loggings import logger
 
@@ -37,6 +38,7 @@ class MyDef(OdeModule):
         self.iiv_ka = omega(0.1)
         self.cmt1 = compartment()
         self.cmt2 = compartment()
+        self.eps_add = sigma(0.1)
 
         self.DV = column("DV")
 
@@ -50,13 +52,14 @@ class MyDef(OdeModule):
         self.cmt2.dAdt = ka * self.cmt1.A - k * self.cmt2.A
         self.cmt1.alag = -k
         self.cmt2.init_value = -ka
-        IPRED = self.cmt2.A / v
-        # if IPRED < 0:
-        #     RES = add(self.DV, -IPRED)
-        #     CUM = normal_cdf(RES)
-        #     return likelihood(CUM)
 
-        return IPRED
+        IPRED = self.cmt2.A / v
+        if IPRED < 0:
+            RES = add(self.DV, -IPRED)
+            CUM = normal_cdf(RES)
+            return likelihood(CUM)
+
+        return IPRED + self.eps_add
 
 
 # class MyDef(EvOneCmtLinear.Physio):

@@ -44,8 +44,10 @@ from symbols._cmt import (
     CmtSolvedAWrt,
 )
 from symbols._ns import SymbolNamespace
+from symbols._omega_eta import Eta
+from symbols._sigma_eps import Eps
 from symbols._x import XWrt
-from symbols._y import Y, YType, YTypeLiteral, YValue, YWrt
+from symbols._y import Y, YType, YValue, YWrt
 from symbols.sympy_parser import parse_sympy_expr
 from syntax.metadata.scope_provider import (
     Scope,
@@ -59,35 +61,6 @@ __all__ = ["AutoDiffTransformer"]
 
 FIRST_ORDER = Symbol("__FIRST_ORDER")
 SECOND_ORDER = Symbol("__SECOND_ORDER")
-
-
-@dataclass(kw_only=True)
-class FirstOrderDerivativeInfo:
-    """
-    A dataclass to hold information about first order derivatives.
-    """
-
-    expr: Expr
-    wrt: Symbol
-
-
-@dataclass(kw_only=True)
-class XFirstOrderDerivativeInfo(FirstOrderDerivativeInfo):
-    """
-    A dataclass to hold information about first order derivatives.
-    """
-
-    x_name: str
-
-    @property
-    def as_assign_target_expression(self):
-        """
-        Get the assign target for the first order derivative.
-        """
-        return cst.ensure_type(
-            XWrt(self.x_name, self.wrt).as_cst_expression(),
-            cst.BaseAssignTargetExpression,
-        )
 
 
 def auto_symbol(tokens: list[TOKEN], local_dict: DICT, global_dict: DICT):
@@ -153,6 +126,18 @@ def auto_symbol(tokens: list[TOKEN], local_dict: DICT, global_dict: DICT):
     return result
 
 
+# tuple[list[cst.BaseStatement], list[tuple[Symbol, Expr]]]
+FirstOrderDerivative = tuple[Eta | Eps | CmtSolvedA, Expr]
+SecondOrderDerivative = tuple[tuple[Eta, Eta | Eps], Expr]
+
+
+@dataclass(frozen=True)
+class ReducedDerivatives:
+    cse_stmts: list[cst.BaseStatement]
+    first_order: list[FirstOrderDerivative]
+    second_order: list[SecondOrderDerivative]
+
+
 class AutoDiffTransformer(cst.CSTTransformer):
     """
     A transformer that modifies the AST to support automatic differentiation.
@@ -198,48 +183,87 @@ class AutoDiffTransformer(cst.CSTTransformer):
         self,
         value: Expr | float | int,
         scope: Scope,
-    ) -> tuple[list[cst.BaseStatement], list[tuple[Symbol, Expr]]]:
-        first_order_derivatives: list[tuple[Symbol, Expr]] = []
+        wrt_etas: bool = True,
+        wrt_eps: bool = True,
+    ) -> ReducedDerivatives:
+        first_order_derivatives: list[FirstOrderDerivative] = []
+        second_order_derivatives: list[SecondOrderDerivative] = []
 
         if isinstance(value, Expr):
-            for wrt in self._symbol_defs.iter_eta():
-                # Z wrt η
-                value_wrt_eta = value.diff(wrt)
-                if issubclass(self._module_cls, OdeModule):
-                    # chained 1a, ∂Z/∂A(i) * ∂A(i)/∂η
-                    for cmt in self._symbol_defs.iter_cmt():
-                        value_wrt_eta += value.diff(cmt.A) * CmtSolvedAWrt(
-                            cmt=cmt, wrt=wrt
-                        )
-                elif issubclass(self._module_cls, ClosedFormSolutionModule):
-                    # chained 1b, ∂Z/∂F * ∂F/∂η
-                    value_wrt_eta += value.diff(
-                        ClosedFormSolutionSolvedF()
-                    ) * ClosedFormSolutionSolvedFWrt(wrt=wrt)
-                    n_cmt = get_annotated_meta(self._module_cls).n_cmt
-                    for cmt_index in range(n_cmt):
-                        # chained 1c, ∂Z/∂A(i) * ∂A(i)/∂η
-                        value_wrt_eta += value.diff(
-                            ClosedFormSolutionSolvedA(index=cmt_index)
-                        ) * ClosedFormSolutionSolvedAWrt(index=cmt_index, wrt=wrt)
+            wrt_symbols: list[Eta | Eps] = []
+            if wrt_etas:
+                wrt_symbols.extend(self._symbol_defs.iter_eta())
+            if wrt_eps:
+                wrt_symbols.extend(self._symbol_defs.iter_eps())
+
+            for i, wrt in enumerate(wrt_symbols):
+                # Z wrt η/ε
+                value_wrt_var = value.diff(wrt)
+
+                if isinstance(wrt, Eta):
+                    # Only chained when wrt is η
+                    if issubclass(self._module_cls, OdeModule):
+                        # chained 1a, ∂Z/∂A(i) * ∂A(i)/∂η
+                        for cmt in self._symbol_defs.iter_cmt():
+                            value_wrt_var += value.diff(cmt.A) * CmtSolvedAWrt(
+                                cmt=cmt, wrt=wrt
+                            )
+                    elif issubclass(self._module_cls, ClosedFormSolutionModule):
+                        # chained 1b, ∂Z/∂F * ∂F/∂η
+                        value_wrt_var += value.diff(
+                            ClosedFormSolutionSolvedF()
+                        ) * ClosedFormSolutionSolvedFWrt(wrt=wrt)
+                        n_cmt = get_annotated_meta(self._module_cls).n_cmt
+                        for cmt_index in range(n_cmt):
+                            # chained 1c, ∂Z/∂A(i) * ∂A(i)/∂η
+                            value_wrt_var += value.diff(
+                                ClosedFormSolutionSolvedA(index=cmt_index)
+                            ) * ClosedFormSolutionSolvedAWrt(index=cmt_index, wrt=wrt)
 
                 # chained arbitrary symbols
                 for symbol in value.free_symbols:
                     if isinstance(symbol, Symbol) and symbol.name in scope:
                         # Z wrt x
                         value_wrt_x = value.diff(symbol)
-                        # chained 2a, ∂Z/∂x * ∂x/∂η
-                        value_wrt_eta += value_wrt_x * XWrt(symbol.name, wrt)
-                        if issubclass(self._module_cls, OdeModule):
-                            for cmt in self._symbol_defs.iter_cmt():
-                                # chained 2b, ∂Z/∂x * ∂x/∂A(i) * ∂A(i)/∂η
-                                value_wrt_eta += (
-                                    value_wrt_x
-                                    * XWrt(symbol.name, cmt.A)
-                                    * CmtSolvedAWrt(cmt=cmt, wrt=wrt)
-                                )
+                        # chained 2a, ∂Z/∂x * ∂x/∂η(ε)
+                        value_wrt_var += value_wrt_x * XWrt(symbol.name, wrt)
+                        if isinstance(wrt, Eta):
+                            if issubclass(self._module_cls, OdeModule):
+                                for cmt in self._symbol_defs.iter_cmt():
+                                    # chained 2b, ∂Z/∂x * ∂x/∂A(i) * ∂A(i)/∂η
+                                    value_wrt_var += (
+                                        value_wrt_x
+                                        * XWrt(symbol.name, cmt.A)
+                                        * CmtSolvedAWrt(cmt=cmt, wrt=wrt)
+                                    )
 
-                first_order_derivatives.append((wrt, value_wrt_eta))
+                first_order_derivatives.append((wrt, value_wrt_var))
+
+                for j, wrt2nd in enumerate(wrt_symbols):
+                    # ∂²Z/∂ηᵢ∂ηⱼ or ∂²Z/∂∂ηᵢ∂εⱼ
+                    if isinstance(wrt, Eta) and isinstance(wrt2nd, Eta):
+                        # We only compute second order derivatives for η
+                        if i < j:
+                            # since it is symmetric, we only compute the lower triangle
+                            continue
+
+                        second_order_derivatives.append(
+                            (
+                                (wrt, wrt2nd),
+                                self._compute_ode_value_2nd_mixed_partial_deriv(
+                                    value=value, wrt=wrt, wrt2nd=wrt2nd
+                                ),
+                            )
+                        )
+                    elif isinstance(wrt, Eta) and isinstance(wrt2nd, Eps):
+                        second_order_derivatives.append(
+                            (
+                                (wrt, wrt2nd),
+                                self._compute_ode_value_2nd_mixed_partial_deriv(
+                                    value=value, wrt=wrt, wrt2nd=wrt2nd
+                                ),
+                            )
+                        )
 
             # if Ode, we also need to compute derivatives w.r.t. A(i)
             if issubclass(self._module_cls, OdeModule):
@@ -256,7 +280,10 @@ class AutoDiffTransformer(cst.CSTTransformer):
 
         # Perform common subexpression elimination (CSE) on the first order derivatives
         replacements, reductions = cse(
-            exprs=[expr for _, expr in first_order_derivatives],
+            exprs=[
+                expr
+                for _, expr in [*first_order_derivatives, *second_order_derivatives]
+            ],
             symbols=numbered_symbols(prefix="__"),
             list=True,
         )
@@ -279,21 +306,34 @@ class AutoDiffTransformer(cst.CSTTransformer):
                 )
             )
 
-        # Update the first order derivatives with the reduced expressions
-        for i, reduced_expr in enumerate(reductions):
-            first_order_derivatives[i] = (first_order_derivatives[i][0], reduced_expr)
+        # Update the derivatives with the reduced expressions
+        i = 0
+        for ii in range(len(first_order_derivatives)):
+            first_order_derivatives[ii] = (
+                first_order_derivatives[ii][0],
+                reductions[i],
+            )
+            i += 1
+        for jj in range(len(second_order_derivatives)):
+            second_order_derivatives[jj] = (
+                second_order_derivatives[jj][0],
+                reductions[i],
+            )
+            i += 1
 
-        return replacement_assignments, first_order_derivatives
+        return ReducedDerivatives(
+            cse_stmts=replacement_assignments,
+            first_order=first_order_derivatives,
+            second_order=second_order_derivatives,
+        )
 
     def _autodiff_arbitrary_x(
         self, x_name: str, value: Expr, scope: Scope
     ) -> list[cst.BaseStatement]:
         stmts: list[cst.BaseStatement] = []
-        replacement_assignments, derivatives = self._do_autodiff_and_cse(
-            value=value, scope=scope
-        )
-        stmts.extend(replacement_assignments)
-        for wrt, expr in derivatives:
+        derivatives = self._do_autodiff_and_cse(value=value, scope=scope)
+        stmts.extend(derivatives.cse_stmts)
+        for wrt, expr in derivatives.first_order:
             stmts.append(
                 with_comment(
                     cst.SimpleStatementLine(
@@ -314,17 +354,50 @@ class AutoDiffTransformer(cst.CSTTransformer):
                     comment=f"# mtran: {x_name} wrt {wrt.name}",
                 )
             )
+        second_order_body: list[cst.BaseStatement] = []
+        for (wrt, wrt2nd), expr in derivatives.second_order:
+            if isinstance(wrt, Eta) and isinstance(wrt2nd, Eps):
+                # ∂²Z/∂εᵢ∂ηⱼ should be compute on __FIRST_ORDER
+                parent = stmts
+            else:
+                parent = second_order_body
+            parent.append(
+                with_comment(
+                    cst.SimpleStatementLine(
+                        body=[
+                            cst.Assign(
+                                targets=[
+                                    cst.AssignTarget(
+                                        target=cst.ensure_type(
+                                            XWrt(
+                                                x_name, wrt, wrt2nd
+                                            ).as_cst_expression(),
+                                            cst.BaseAssignTargetExpression,
+                                        )
+                                    )
+                                ],
+                                value=parse_sympy_expr(expr),
+                            )
+                        ],
+                    ),
+                    comment=f"# mtran: {x_name} wrt {wrt.name}, {wrt2nd.name}",
+                )
+            )
+        stmts.append(
+            cst.If(
+                test=cst.Name(SECOND_ORDER.name),
+                body=cst.IndentedBlock(body=second_order_body),
+            )
+        )
         return stmts
 
     def _autodiff_dAdt(
         self, dAdt: CmtDADt, value: Expr, scope: Scope
     ) -> list[cst.BaseStatement]:
         stmts: list[cst.BaseStatement] = []
-        replacement_assignments, derivatives = self._do_autodiff_and_cse(
-            value=value, scope=scope
-        )
-        stmts.extend(replacement_assignments)
-        for wrt, expr in derivatives:
+        derivatives = self._do_autodiff_and_cse(value=value, scope=scope, wrt_eps=False)
+        stmts.extend(derivatives.cse_stmts)
+        for wrt, expr in derivatives.first_order:
             stmts.append(
                 with_comment(
                     cst.SimpleStatementLine(
@@ -348,6 +421,42 @@ class AutoDiffTransformer(cst.CSTTransformer):
                     comment=f"# mtran: {dAdt.name} wrt {wrt.name}",
                 )
             )
+        second_order_body: list[cst.BaseStatement] = []
+        for (wrt, wrt2nd), expr in derivatives.second_order:
+            if isinstance(wrt2nd, Eps):
+                # ∂²Z/∂∂ηᵢ∂εⱼ makes no sense here, we skip it
+                continue
+            second_order_body.append(
+                with_comment(
+                    cst.SimpleStatementLine(
+                        body=[
+                            cst.Assign(
+                                targets=[
+                                    cst.AssignTarget(
+                                        target=cst.ensure_type(
+                                            CmtDADtWrt(
+                                                cmt=dAdt.cmt,
+                                                wrt=wrt,
+                                                wrt2nd=wrt2nd,
+                                            ).as_cst_expression(),
+                                            cst.BaseAssignTargetExpression,
+                                        )
+                                    )
+                                ],
+                                value=parse_sympy_expr(expr),
+                            )
+                        ],
+                    ),
+                    comment=f"# mtran: {dAdt.name} wrt {wrt.name}, {wrt2nd.name}",
+                )
+            )
+
+        stmts.append(
+            cst.If(
+                test=cst.Name(SECOND_ORDER.name),
+                body=cst.IndentedBlock(body=second_order_body),
+            )
+        )
         return stmts
 
     def _autodiff_closed_form_solve_args(
@@ -376,15 +485,14 @@ class AutoDiffTransformer(cst.CSTTransformer):
                 )
             )
 
-            replacement_assignments, derivatives = self._do_autodiff_and_cse(
-                value=expr,
-                scope=scope,
+            derivatives = self._do_autodiff_and_cse(
+                value=expr, scope=scope, wrt_eps=False
             )
 
-            stmts.extend(replacement_assignments)
+            stmts.extend(derivatives.cse_stmts)
 
             first_order_body: list[cst.BaseStatement] = []
-            for wrt, expr in derivatives:
+            for wrt, expr in derivatives.first_order:
                 first_order_body.append(
                     with_comment(
                         cst.SimpleStatementLine(
@@ -405,6 +513,41 @@ class AutoDiffTransformer(cst.CSTTransformer):
                         comment=f"# mtran: {arg.param_name} wrt {wrt.name}",
                     )
                 )
+
+            second_order_body: list[cst.BaseStatement] = []
+            for (wrt, wrt2nd), expr in derivatives.second_order:
+                if isinstance(wrt2nd, Eps):
+                    # ∂²Z/∂∂ηᵢ∂εⱼ makes no sense here, we skip it
+                    continue
+                second_order_body.append(
+                    with_comment(
+                        cst.SimpleStatementLine(
+                            body=[
+                                cst.Assign(
+                                    targets=[
+                                        cst.AssignTarget(
+                                            target=cst.ensure_type(
+                                                arg.diff(
+                                                    wrt, wrt2nd
+                                                ).as_cst_expression(),
+                                                cst.BaseAssignTargetExpression,
+                                            )
+                                        )
+                                    ],
+                                    value=parse_sympy_expr(expr),
+                                )
+                            ],
+                        ),
+                        comment=f"# mtran: {arg.param_name} wrt {wrt.name}, {wrt2nd.name}",
+                    )
+                )
+            first_order_body.append(
+                cst.If(
+                    test=cst.Name(SECOND_ORDER.name),
+                    body=cst.IndentedBlock(body=second_order_body),
+                )
+            )
+
             stmts.append(
                 cst.If(
                     test=cst.Name(FIRST_ORDER.name),
@@ -439,15 +582,13 @@ class AutoDiffTransformer(cst.CSTTransformer):
                 )
             )
 
-            replacement_assignments, derivatives = self._do_autodiff_and_cse(
-                value=expr,
-                scope=scope,
+            derivatives = self._do_autodiff_and_cse(
+                value=expr, scope=scope, wrt_eps=False
             )
 
-            stmts.extend(replacement_assignments)
-
+            stmts.extend(derivatives.cse_stmts)
             first_order_body: list[cst.BaseStatement] = []
-            for wrt, expr in derivatives:
+            for wrt, expr in derivatives.first_order:
                 first_order_body.append(
                     with_comment(
                         cst.SimpleStatementLine(
@@ -468,6 +609,40 @@ class AutoDiffTransformer(cst.CSTTransformer):
                         comment=f"# mtran: {arg.param_name} wrt {wrt.name}",
                     )
                 )
+
+            second_order_body: list[cst.BaseStatement] = []
+            for (wrt, wrt2nd), expr in derivatives.second_order:
+                if isinstance(wrt2nd, Eps):
+                    # ∂²Z/∂∂ηᵢ∂εⱼ makes no sense here, we skip it
+                    continue
+                second_order_body.append(
+                    with_comment(
+                        cst.SimpleStatementLine(
+                            body=[
+                                cst.Assign(
+                                    targets=[
+                                        cst.AssignTarget(
+                                            target=cst.ensure_type(
+                                                arg.diff(
+                                                    wrt, wrt2nd
+                                                ).as_cst_expression(),
+                                                cst.BaseAssignTargetExpression,
+                                            )
+                                        )
+                                    ],
+                                    value=parse_sympy_expr(expr),
+                                )
+                            ],
+                        ),
+                        comment=f"# mtran: {arg.param_name} wrt {wrt.name}, {wrt2nd.name}",
+                    )
+                )
+            first_order_body.append(
+                cst.If(
+                    test=cst.Name(SECOND_ORDER.name),
+                    body=cst.IndentedBlock(body=second_order_body),
+                )
+            )
             stmts.append(
                 cst.If(
                     test=cst.Name(FIRST_ORDER.name),
@@ -674,11 +849,9 @@ class AutoDiffTransformer(cst.CSTTransformer):
 
         first_order_body: list[cst.BaseStatement] = []
         if isinstance(evaluated_value, Expr):
-            replacement_assignments, derivatives = self._do_autodiff_and_cse(
-                value=evaluated_value, scope=scope
-            )
-            first_order_body.extend(replacement_assignments)
-            for wrt, expr in derivatives:
+            derivatives = self._do_autodiff_and_cse(value=evaluated_value, scope=scope)
+            first_order_body.extend(derivatives.cse_stmts)
+            for wrt, expr in derivatives.first_order:
                 first_order_body.append(
                     with_comment(
                         cst.SimpleStatementLine(
@@ -699,14 +872,47 @@ class AutoDiffTransformer(cst.CSTTransformer):
                         comment=f"# mtran: __Y__ wrt {wrt.name}",
                     )
                 )
+            second_order_body: list[cst.BaseStatement] = []
+            for (wrt, wrt2nd), expr in derivatives.second_order:
+                if isinstance(wrt, Eta) and isinstance(wrt2nd, Eps):
+                    # ∂²Z/∂εᵢ∂ηⱼ should be compute on __FIRST_ORDER
+                    parent = first_order_body
+                else:
+                    parent = second_order_body
 
-        if len(first_order_body) > 0:
-            transformed.append(
+                parent.append(
+                    with_comment(
+                        cst.SimpleStatementLine(
+                            body=[
+                                cst.Assign(
+                                    targets=[
+                                        cst.AssignTarget(
+                                            target=cst.ensure_type(
+                                                YWrt(wrt, wrt2nd).as_cst_expression(),
+                                                cst.BaseAssignTargetExpression,
+                                            )
+                                        )
+                                    ],
+                                    value=parse_sympy_expr(expr),
+                                )
+                            ],
+                        ),
+                        comment=f"# mtran: __Y__ wrt {wrt.name}, {wrt2nd.name}",
+                    )
+                )
+            first_order_body.append(
                 cst.If(
-                    test=cst.Name(FIRST_ORDER.name),
-                    body=cst.IndentedBlock(body=first_order_body),
+                    test=cst.Name(SECOND_ORDER.name),
+                    body=cst.IndentedBlock(body=second_order_body),
                 )
             )
+
+        transformed.append(
+            cst.If(
+                test=cst.Name(FIRST_ORDER.name),
+                body=cst.IndentedBlock(body=first_order_body),
+            )
+        )
         transformed.append(cst.SimpleStatementLine(body=[cst.Return()]))
         return transformed
 

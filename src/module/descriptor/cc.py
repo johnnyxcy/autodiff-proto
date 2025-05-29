@@ -10,6 +10,15 @@ from libcst.metadata import (
 )
 from pandas.api.types import is_float_dtype, is_integer_dtype
 from sympy import Add, Basic, Expr, Mul, Number, Pow, Symbol, exp, parse_expr
+from sympy.core.relational import (
+    Equality,
+    GreaterThan,
+    LessThan,
+    Relational,
+    StrictGreaterThan,
+    StrictLessThan,
+    Unequality,
+)
 from sympy.parsing.sympy_parser import auto_symbol
 
 from __version__ import __version__
@@ -434,12 +443,19 @@ class CCTransPredVisitor(cst.CSTVisitor):
             left_type = ValueType.VALUE_TYPE_DOUBLE
         elif isinstance(lhs, CmtDADt):
             index = self._compute_ode_index(cmt=lhs.cmt)
-            left_type = ValueType.VALUE_TYPE_DOUBLE
+            if index is None:
+                return None
             left = f"{PRED_CONTEXT_VARNAME}->ode->dAdt[{index}]"
+            left_type = ValueType.VALUE_TYPE_DOUBLE
         elif isinstance(lhs, CmtDADtWrt):
             index = self._compute_ode_index(cmt=lhs.cmt, wrt=lhs.wrt, wrt2nd=lhs.wrt2nd)
+            if index is None:
+                return None
+            if isinstance(lhs.wrt, CmtSolvedA):
+                left = f"{PRED_CONTEXT_VARNAME}->ode->dA[{index}]"
+            else:
+                left = f"{PRED_CONTEXT_VARNAME}->ode->dAdt[{index}]"
             left_type = ValueType.VALUE_TYPE_DOUBLE
-            left = f"{PRED_CONTEXT_VARNAME}->ode->dAdt[{index}]"
         elif isinstance(lhs, Symbol):  # raw symbol
             lhs_is_name = True
             left = lhs.name
@@ -505,25 +521,48 @@ class CCTransPredVisitor(cst.CSTVisitor):
         if isinstance(expr, bool):
             return ValueType.VALUE_TYPE_BOOL, str(expr).lower()
 
-        if isinstance(expr, Expr):
-            return ValueType.VALUE_TYPE_DOUBLE, self._translate_sympy_expr(expr)
+        if isinstance(expr, Basic):
+            return ValueType.VALUE_TYPE_DOUBLE, self._translate_sympy(expr)
 
-        return ValueType.VALUE_TYPE_DOUBLE, "0.0"
+        rethrow(
+            NotImplementedError("Cannot translate expression"),
+            rhs,
+            self._source_code,
+        )
 
-    def _translate_sympy_expr(self, expr: Basic) -> str:
+    def _translate_sympy(self, expr: Basic) -> str:
         """
         Translate a sympy expression to C++ code.
         """
         if isinstance(expr, Number):
             return str(expr)
+        # region Comparison
+        if isinstance(expr, Relational):
+            lhs_ = self._translate_sympy(expr.lhs)
+            rhs_ = self._translate_sympy(expr.rhs)
 
+            op = ""
+            if isinstance(expr, Equality):
+                op = "=="
+            if isinstance(expr, Unequality):
+                op = "!="
+            if isinstance(expr, GreaterThan):
+                op = ">"
+            if isinstance(expr, LessThan):
+                op = "<"
+            if isinstance(expr, StrictGreaterThan):
+                op = ">="
+            if isinstance(expr, StrictLessThan):
+                op = "<="
+            return f"{lhs_} {op} {rhs_}"
+
+        # endregion
         if isinstance(expr, ClosedFormSolutionSolvedF):
             return f"{CLOSED_FORM_SOLUTION_VARNAME}.F()"
         if isinstance(expr, ClosedFormSolutionSolvedFWrt):
             if isinstance(expr.wrt, Eta):
                 eta_index = self._descriptor.etas.index(expr.wrt)
                 return f"{CLOSED_FORM_SOLUTION_VARNAME}.F({eta_index})"
-
         if isinstance(expr, ClosedFormSolutionSolvedA):
             return f"{CLOSED_FORM_SOLUTION_VARNAME}.A({expr.index})"
         if isinstance(expr, ClosedFormSolutionSolvedAWrt):
@@ -535,16 +574,25 @@ class CCTransPredVisitor(cst.CSTVisitor):
             index = self._compute_ode_index(
                 cmt=expr.cmt, wrt=expr.wrt, wrt2nd=expr.wrt2nd
             )
-            return f"{PRED_CONTEXT_VARNAME}->ode->dAdt[{index}]"
+            if index is None:
+                return "0."
+            if isinstance(expr.wrt, CmtSolvedA):
+                return f"{PRED_CONTEXT_VARNAME}->ode->dA[{index}]"
+            else:
+                return f"{PRED_CONTEXT_VARNAME}->ode->dAdt[{index}]"
 
         if isinstance(expr, CmtSolvedA):
             index = self._compute_ode_index(cmt=expr.cmt)
+            if index is None:
+                return "0."
             return f"{PRED_CONTEXT_VARNAME}->ode->A[{index}]"
 
         if isinstance(expr, CmtSolvedAWrt):
             index = self._compute_ode_index(
                 cmt=expr.cmt, wrt=expr.wrt, wrt2nd=expr.wrt2nd
             )
+            if index is None:
+                return "0."
             return f"{PRED_CONTEXT_VARNAME}->ode->A[{index}]"
 
         if isinstance(expr, XWrt):
@@ -563,15 +611,15 @@ class CCTransPredVisitor(cst.CSTVisitor):
                     return f"{mask_self_attr(symbol.name)}"
             return expr.name
         if isinstance(expr, Add):
-            return " + ".join(self._translate_sympy_expr(arg) for arg in expr.args)
+            return " + ".join(self._translate_sympy(arg) for arg in expr.args)
         if isinstance(expr, Mul):
-            return " * ".join(self._translate_sympy_expr(arg) for arg in expr.args)
+            return " * ".join(self._translate_sympy(arg) for arg in expr.args)
         if isinstance(expr, exp):
-            to = self._translate_sympy_expr(expr.exp)
+            to = self._translate_sympy(expr.exp)
             return f"std::exp({to})"
         if isinstance(expr, Pow):
-            base = self._translate_sympy_expr(expr.base)
-            to = self._translate_sympy_expr(expr.exp)
+            base = self._translate_sympy(expr.base)
+            to = self._translate_sympy(expr.exp)
             return f"std::pow({base}, {to})"
 
         raise NotImplementedError(f"Unsupported expression type: {type(expr)}")
@@ -633,7 +681,7 @@ class CCTransPredVisitor(cst.CSTVisitor):
         cmt: Compartment,
         wrt: Symbol | CmtSolvedA | None = None,
         wrt2nd: Symbol | None = None,
-    ) -> int:
+    ) -> int | None:
         n_cmt = len(self._descriptor.cmts)
         n_eta = len(self._descriptor.etas)
         cmt_index = self._descriptor.cmts.index(cmt)
@@ -647,7 +695,7 @@ class CCTransPredVisitor(cst.CSTVisitor):
                 cmt2_index = self._descriptor.cmts.index(wrt.cmt)
                 return cmt_index * n_cmt + cmt2_index
             else:
-                raise TypeError("wrt is not valid {0}".format(wrt))
+                return None
         else:
             # TODO(@xuchongyi): 做二阶 ode 的时候这个索引要和 Indexer 对齐
             if isinstance(wrt, Eta) and isinstance(wrt2nd, Eta):
@@ -657,9 +705,7 @@ class CCTransPredVisitor(cst.CSTVisitor):
 
                 return n_cmt + n_cmt * n_eta + comb_index * n_cmt + cmt_index
             else:
-                raise TypeError(
-                    "wrt and wrt2nd is not valid {0}, {1}".format(wrt, wrt2nd)
-                )
+                return None
 
     def _compute_eta_2nd_partial_index(self, eta_i: Eta, eta_j: Eta) -> int:
         # 下三角的索引

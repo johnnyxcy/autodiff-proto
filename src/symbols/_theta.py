@@ -14,7 +14,8 @@ __all__ = ["theta", "Theta"]
 
 class Theta(Symbol, CodeGen, AsCSTExpression):
     """
-    Theta parameter, which is the fixed effect in nonlinear mixed effects model.
+    Theta (θ) parameter.
+    Represents the fixed effect parameters in a nonlinear mixed effects model.
 
     Attributes
     ----------

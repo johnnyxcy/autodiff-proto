@@ -17,7 +17,8 @@ __all__ = ["omega", "omega_sd", "omega_iov", "omega_iov_sd", "Omega", "OmegaIOV"
 
 class Eta(Symbol, AsCSTExpression):
     """
-    Eta parameter, which is the interindividual variability in nonlinear mixed effects model.
+    Eta (η) parameter.
+    Represents the interindividual variability (IIV) in a nonlinear mixed effects model.
 
     Attributes
     ----------

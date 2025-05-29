@@ -15,7 +15,9 @@ from typings import AsCSTExpression, CodeGen, ValueType
 
 class Eps(Symbol, AsCSTExpression):
     """
-    Eps parameter, which is the intraindividual variability in nonlinear mixed effects model.
+    Eps (ε) parameter.
+
+    Represents the intraindividual variability in nonlinear mixed effects model.
 
     Attributes
     ----------
