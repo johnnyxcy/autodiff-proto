@@ -314,6 +314,11 @@ class CCTransPredVisitor(cst.CSTVisitor):
                     self._source_code,
                 )
 
+        if self._descriptor.is_closed_form_solution:
+            declarations.append(
+                f"{ClosedFormSolutionTransRack.name} = {PRED_CONTEXT_VARNAME}->pk->solver->ref({PRED_CONTEXT_VARNAME}->pk->solve_ctx);"
+            )
+
         self._translated = [
             f"Result<void> __pred(PredContext* {PRED_CONTEXT_VARNAME})",
             "{",
