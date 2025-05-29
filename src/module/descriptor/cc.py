@@ -84,19 +84,9 @@ class ValueType(enum.Enum):
 
     VALUE_TYPE_CMT_PTR = "Cmt*"
 
-    VALUE_TYPE_SYMBOL_TABLE = "SymbolTable"
-    VALUE_TYPE_SYMBOL_TABLE_PTR = "SymbolTable*"
     VALUE_TYPE_LOCALS_PTR = "Locals*"
     VALUE_TYPE_RNG_PTR = "Rng*"
     VALUE_TYPE_PRED_CTX_PTR = "PredContext*"
-
-    VALUE_TYPE_DOUBLE_CONTEXT = "VarContext<double>"
-    VALUE_TYPE_DOUBLE_CONTEXT_REF = "VarContext<double>&"
-    VALUE_TYPE_STRING_CONTEXT = "VarContext<std::string>"
-    VALUE_TYPE_STRING_CONTEXT_REF = "VarContext<std::string>&"
-    VALUE_TYPE_VOID_CONTEXT_REF = "VarContext<void*>&"
-
-    VALUE_TYPE_CLOSED_FORM_SOLUTION = "ClosedFormSolution"
 
     # region Internal
     VALUE_TYPE__INTERNAL_SIM_CONTEXT_TARGET = "ICallSim"
@@ -304,9 +294,13 @@ class CCTransPredVisitor(cst.CSTVisitor):
             if value_type.is_ptr():
                 declarations.append(f"{value_type.to_cc_type()} {name} = nullptr;")
             elif value_type.is_numeric():
-                declarations.append(f"double {name} = 0.;")
+                declarations.append(
+                    f"{ValueType.VALUE_TYPE_DOUBLE.to_cc_type()} {name} = 0.;"
+                )
             elif value_type == ValueType.VALUE_TYPE_STRING:
-                declarations.append(f'std::string {name} = "";')
+                declarations.append(
+                    f'{ValueType.VALUE_TYPE_STRING.to_cc_type()} {name} = "";'
+                )
             else:
                 rethrow(
                     NotImplementedError(f"Unsupported value type: {value_type}"),
@@ -319,8 +313,14 @@ class CCTransPredVisitor(cst.CSTVisitor):
                 f"{ClosedFormSolutionTransRack.name} = {PRED_CONTEXT_VARNAME}->pk->solver->ref({PRED_CONTEXT_VARNAME}->pk->solve_ctx);"
             )
 
+        if self._descriptor.class_type == "OdeModule":
+            for cmt in self._descriptor.cmts:
+                declarations.append(
+                    f"{ValueType.VALUE_TYPE_CMT_PTR.to_cc_type()} {mask_self_attr(cmt.name)} = {MSYMTAB_VARNAME}->{mask_self_attr(cmt.name)};"
+                )
+
         self._translated = [
-            f"Result<void> __pred(PredContext* {PRED_CONTEXT_VARNAME})",
+            f"Result<void> __pred({ValueType.VALUE_TYPE_PRED_CTX_PTR.to_cc_type()}* {PRED_CONTEXT_VARNAME})",
             "{",
             "// #region Declarations",
             f"__SymbolTable* {MSYMTAB_VARNAME} = reinterpret_cast<__SymbolTable*>({PRED_CONTEXT_VARNAME}->symtab);",
@@ -1041,7 +1041,7 @@ double log(double v) {
                 ]
             ),
             "};",
-            f"class __SymbolTable : public {ValueType.VALUE_TYPE_SYMBOL_TABLE.value}",
+            "class __SymbolTable : public SymbolTable",
             "{",
             "public:",
             *declaration_lines,
