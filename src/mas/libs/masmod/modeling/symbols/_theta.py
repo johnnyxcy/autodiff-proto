@@ -61,18 +61,18 @@ class Theta(Symbol, CodeGen, AsCSTExpression):
 
     def _code_gen(self):
         args = [
-            cst.Arg(value=cst.Float(value=str(self.init_value))),
+            cst.Arg(value=cst.parse_expression(str(self.init_value))),
         ]
         if self.bounds[0] or self.bounds[1]:
             if self.bounds[0] is None:
                 lower_ = cst.Name(value="None")
             else:
-                lower_ = cst.Float(value=str(self.bounds[0]))
+                lower_ = cst.parse_expression(str(self.bounds[0]))
 
             if self.bounds[1] is None:
                 upper_ = cst.Name(value="None")
             else:
-                upper_ = cst.Float(value=str(self.bounds[1]))
+                upper_ = cst.parse_expression(str(self.bounds[1]))
 
             args.append(
                 cst.Arg(
@@ -93,7 +93,13 @@ class Theta(Symbol, CodeGen, AsCSTExpression):
                 )
             )
         return cst.Assign(
-            targets=[cst.AssignTarget(cst.Name(value=self.name))],
+            targets=[
+                cst.AssignTarget(
+                    cst.Attribute(
+                        value=cst.Name("self"), attr=cst.Name(value=self.name)
+                    )
+                )
+            ],
             value=cst.Call(
                 func=cst.Name(value=theta.__name__),
                 args=args,

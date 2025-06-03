@@ -61,7 +61,7 @@ from mas.libs.masmod.modeling.syntax.metadata.scope_provider import (
 )
 from mas.libs.masmod.modeling.syntax.rethrow import rethrow
 from mas.libs.masmod.modeling.syntax.unparse import unparse
-from mas.libs.masmod.modeling.syntax.with_comment import with_comment
+from mas.libs.masmod.modeling.syntax.with_comment import with_trailing_comment
 
 __all__ = ["AutoDiffTransformer"]
 
@@ -341,7 +341,7 @@ class AutoDiffTransformer(cst.CSTTransformer):
         stmts.extend(derivatives.cse_stmts)
         for wrt, expr in derivatives.first_order:
             stmts.append(
-                with_comment(
+                with_trailing_comment(
                     cst.SimpleStatementLine(
                         body=[
                             cst.Assign(
@@ -368,7 +368,7 @@ class AutoDiffTransformer(cst.CSTTransformer):
             else:
                 parent = second_order_body
             parent.append(
-                with_comment(
+                with_trailing_comment(
                     cst.SimpleStatementLine(
                         body=[
                             cst.Assign(
@@ -405,7 +405,7 @@ class AutoDiffTransformer(cst.CSTTransformer):
         stmts.extend(derivatives.cse_stmts)
         for wrt, expr in derivatives.first_order:
             stmts.append(
-                with_comment(
+                with_trailing_comment(
                     cst.SimpleStatementLine(
                         body=[
                             cst.Assign(
@@ -433,7 +433,7 @@ class AutoDiffTransformer(cst.CSTTransformer):
                 # ∂²Z/∂∂ηᵢ∂εⱼ makes no sense here, we skip it
                 continue
             second_order_body.append(
-                with_comment(
+                with_trailing_comment(
                     cst.SimpleStatementLine(
                         body=[
                             cst.Assign(
@@ -500,7 +500,7 @@ class AutoDiffTransformer(cst.CSTTransformer):
             first_order_body: list[cst.BaseStatement] = []
             for wrt, expr in derivatives.first_order:
                 first_order_body.append(
-                    with_comment(
+                    with_trailing_comment(
                         cst.SimpleStatementLine(
                             body=[
                                 cst.Assign(
@@ -526,7 +526,7 @@ class AutoDiffTransformer(cst.CSTTransformer):
                     # ∂²Z/∂∂ηᵢ∂εⱼ makes no sense here, we skip it
                     continue
                 second_order_body.append(
-                    with_comment(
+                    with_trailing_comment(
                         cst.SimpleStatementLine(
                             body=[
                                 cst.Assign(
@@ -596,7 +596,7 @@ class AutoDiffTransformer(cst.CSTTransformer):
             first_order_body: list[cst.BaseStatement] = []
             for wrt, expr in derivatives.first_order:
                 first_order_body.append(
-                    with_comment(
+                    with_trailing_comment(
                         cst.SimpleStatementLine(
                             body=[
                                 cst.Assign(
@@ -622,7 +622,7 @@ class AutoDiffTransformer(cst.CSTTransformer):
                     # ∂²Z/∂∂ηᵢ∂εⱼ makes no sense here, we skip it
                     continue
                 second_order_body.append(
-                    with_comment(
+                    with_trailing_comment(
                         cst.SimpleStatementLine(
                             body=[
                                 cst.Assign(
@@ -859,7 +859,7 @@ class AutoDiffTransformer(cst.CSTTransformer):
             first_order_body.extend(derivatives.cse_stmts)
             for wrt, expr in derivatives.first_order:
                 first_order_body.append(
-                    with_comment(
+                    with_trailing_comment(
                         cst.SimpleStatementLine(
                             body=[
                                 cst.Assign(
@@ -887,7 +887,7 @@ class AutoDiffTransformer(cst.CSTTransformer):
                     parent = second_order_body
 
                 parent.append(
-                    with_comment(
+                    with_trailing_comment(
                         cst.SimpleStatementLine(
                             body=[
                                 cst.Assign(

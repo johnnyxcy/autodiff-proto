@@ -19,21 +19,21 @@ MultiValueType = typing.Sequence[ValueType]
 MultiBoundsType = typing.Sequence[BoundsType]
 
 
-@dataclass
+@dataclass(kw_only=True)
 class CategoricalCovariateInclusionSpec:
     state: CategoricalCovariateInclusionType
-    init: ValueType | list[ValueType] | None
-    bounds: BoundsType | list[BoundsType] | None
-    fixed: bool
+    init: ValueType | list[ValueType] | None = None
+    bounds: BoundsType | list[BoundsType] | None = None
+    fixed: bool = False
 
 
-@dataclass
+@dataclass(kw_only=True)
 class CategoricalCovariateRelation:
     on: Theta
     covariate: AnyCategoricalColVar
 
 
-@dataclass
+@dataclass(kw_only=True)
 class CategoricalCovariateInclusion(
     CategoricalCovariateRelation, CategoricalCovariateInclusionSpec
 ):
@@ -46,21 +46,21 @@ class CategoricalCovariateInclusion(
         return s
 
 
-@dataclass
+@dataclass(kw_only=True)
 class ContinuousCovariateInclusionSpec:
     state: ContinuousCovariateInclusionType
-    init: ValueType | list[ValueType] | None
-    bounds: BoundsType | list[BoundsType] | None
-    fixed: bool
+    init: ValueType | list[ValueType] | None = None
+    bounds: BoundsType | list[BoundsType] | None = None
+    fixed: bool = False
 
 
-@dataclass
+@dataclass(kw_only=True)
 class ContinuousCovariateRelation:
     on: Theta
     covariate: AnyContinuousColVar
 
 
-@dataclass
+@dataclass(kw_only=True)
 class ContinuousCovariateInclusion(
     ContinuousCovariateRelation, ContinuousCovariateInclusionSpec
 ):

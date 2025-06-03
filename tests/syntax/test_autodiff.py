@@ -116,14 +116,21 @@ def pred(self):
     if self.tv_v > 0:
         v = self.tv_v * exp(self.iiv_v)
         if __FIRST_ORDER:
-            __X__[v, self.iiv_v] = self.tv_v * exp(self.iiv_v)  # mtran: v wrt iiv_v
+            __X__["v", self.iiv_v] = self.tv_v * exp(self.iiv_v)  # mtran: v wrt iiv_v
+            if __SECOND_ORDER:
+                __X__["v", self.iiv_v, self.iiv_v] = 0  # mtran: v wrt iiv_v, iiv_v
     else:
         v = self.tv_v + self.iiv_v
         if __FIRST_ORDER:
-            __X__[v, self.iiv_v] = 1  # mtran: v wrt iiv_v
-    __Y__["prediction"] = v
+            __X__["v", self.iiv_v] = 1  # mtran: v wrt iiv_v
+            if __SECOND_ORDER:
+                __X__["v", self.iiv_v, self.iiv_v] = 0  # mtran: v wrt iiv_v, iiv_v
+    __Y__["type"] = 0
+    __Y__[:] = v
     if __FIRST_ORDER:
-        __Y__[self.iiv_v] = __X__[v, self.iiv_v]  # mtran: __Y__ wrt iiv_v
+        __Y__[self.iiv_v] = __X__["v", self.iiv_v]  # mtran: __Y__ wrt iiv_v
+        if __SECOND_ORDER:
+            __Y__[self.iiv_v, self.iiv_v] = 0  # mtran: __Y__ wrt iiv_v, iiv_v
     return
 """
     src = inspect.getsource(IfElse.pred).strip()
@@ -140,7 +147,6 @@ def pred(self):
     )
 
     transformed = _transform(src, transformer)
-    # print(unparse(transformed))
     assert unparse(transformed) == expected.strip()
 
 
@@ -160,13 +166,20 @@ def test_override1():
 def pred(self):
     v = self.tv_v * exp(self.iiv_v)
     if __FIRST_ORDER:
-        __X__[v, self.iiv_v] = self.tv_v * exp(self.iiv_v)  # mtran: v wrt iiv_v
+        __X__["v", self.iiv_v] = self.tv_v * exp(self.iiv_v)  # mtran: v wrt iiv_v
+        if __SECOND_ORDER:
+            __X__["v", self.iiv_v, self.iiv_v] = 0  # mtran: v wrt iiv_v, iiv_v
     v = self.tv_v + self.iiv_v
     if __FIRST_ORDER:
-        __X__[v, self.iiv_v] = 1  # mtran: v wrt iiv_v
-    __Y__["prediction"] = v
+        __X__["v", self.iiv_v] = 1  # mtran: v wrt iiv_v
+        if __SECOND_ORDER:
+            __X__["v", self.iiv_v, self.iiv_v] = 0  # mtran: v wrt iiv_v, iiv_v
+    __Y__["type"] = 0
+    __Y__[:] = v
     if __FIRST_ORDER:
-        __Y__[self.iiv_v] = __X__[v, self.iiv_v]  # mtran: __Y__ wrt iiv_v
+        __Y__[self.iiv_v] = __X__["v", self.iiv_v]  # mtran: __Y__ wrt iiv_v
+        if __SECOND_ORDER:
+            __Y__[self.iiv_v, self.iiv_v] = 0  # mtran: __Y__ wrt iiv_v, iiv_v
     return
 """
 
@@ -184,7 +197,6 @@ def pred(self):
     )
 
     transformed = _transform(src, transformer)
-    # print(unparse(transformed))
     assert unparse(transformed) == expected.strip()
 
 
@@ -205,14 +217,21 @@ def test_override_in_if():
 def pred(self):
     v = self.tv_v * exp(self.iiv_v)
     if __FIRST_ORDER:
-        __X__[v, self.iiv_v] = self.tv_v * exp(self.iiv_v)  # mtran: v wrt iiv_v
+        __X__["v", self.iiv_v] = self.tv_v * exp(self.iiv_v)  # mtran: v wrt iiv_v
+        if __SECOND_ORDER:
+            __X__["v", self.iiv_v, self.iiv_v] = 0  # mtran: v wrt iiv_v, iiv_v
     if self.tv_v > 0:
         v = self.tv_v + self.iiv_v
         if __FIRST_ORDER:
-            __X__[v, self.iiv_v] = 1  # mtran: v wrt iiv_v
-    __Y__["prediction"] = v
+            __X__["v", self.iiv_v] = 1  # mtran: v wrt iiv_v
+            if __SECOND_ORDER:
+                __X__["v", self.iiv_v, self.iiv_v] = 0  # mtran: v wrt iiv_v, iiv_v
+    __Y__["type"] = 0
+    __Y__[:] = v
     if __FIRST_ORDER:
-        __Y__[self.iiv_v] = __X__[v, self.iiv_v]  # mtran: __Y__ wrt iiv_v
+        __Y__[self.iiv_v] = __X__["v", self.iiv_v]  # mtran: __Y__ wrt iiv_v
+        if __SECOND_ORDER:
+            __Y__[self.iiv_v, self.iiv_v] = 0  # mtran: __Y__ wrt iiv_v, iiv_v
     return
 """
 
@@ -251,17 +270,26 @@ def test_carryover():
 def pred(self):
     v = self.tv_v * exp(self.iiv_v)
     if __FIRST_ORDER:
-        __X__[v, self.iiv_v] = self.tv_v * exp(self.iiv_v)  # mtran: v wrt iiv_v
+        __X__["v", self.iiv_v] = self.tv_v * exp(self.iiv_v)  # mtran: v wrt iiv_v
+        if __SECOND_ORDER:
+            __X__["v", self.iiv_v, self.iiv_v] = 0  # mtran: v wrt iiv_v, iiv_v
     z = v
     if __FIRST_ORDER:
-        __X__[z, self.iiv_v] = __X__[v, self.iiv_v]  # mtran: z wrt iiv_v
+        __X__["z", self.iiv_v] = __X__["v", self.iiv_v]  # mtran: z wrt iiv_v
+        if __SECOND_ORDER:
+            __X__["z", self.iiv_v, self.iiv_v] = 0  # mtran: z wrt iiv_v, iiv_v
     if v < 0:
         z = -v
         if __FIRST_ORDER:
-            __X__[z, self.iiv_v] = -1 * __X__[v, self.iiv_v]  # mtran: z wrt iiv_v
-    __Y__["prediction"] = z
+            __X__["z", self.iiv_v] = -1 * __X__["v", self.iiv_v]  # mtran: z wrt iiv_v
+            if __SECOND_ORDER:
+                __X__["z", self.iiv_v, self.iiv_v] = 0  # mtran: z wrt iiv_v, iiv_v
+    __Y__["type"] = 0
+    __Y__[:] = z
     if __FIRST_ORDER:
-        __Y__[self.iiv_v] = __X__[z, self.iiv_v]  # mtran: __Y__ wrt iiv_v
+        __Y__[self.iiv_v] = __X__["z", self.iiv_v]  # mtran: __Y__ wrt iiv_v
+        if __SECOND_ORDER:
+            __Y__[self.iiv_v, self.iiv_v] = 0  # mtran: __Y__ wrt iiv_v, iiv_v
     return
     """
 

@@ -80,7 +80,13 @@ class ColVar(Symbol, CodeGen):
             )
 
         return cst.Assign(
-            targets=[cst.AssignTarget(cst.Name(value=self.name))],
+            targets=[
+                cst.AssignTarget(
+                    cst.Attribute(
+                        value=cst.Name("self"), attr=cst.Name(value=self.name)
+                    )
+                )
+            ],
             value=cst.Call(func=cst.Name(value=column.__name__), args=args),
         )
 

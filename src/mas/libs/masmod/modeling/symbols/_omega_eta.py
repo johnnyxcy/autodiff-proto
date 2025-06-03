@@ -88,7 +88,12 @@ class Omega(SymbolBlock[Eta], CodeGen):
     def _code_gen(self):
         values = self.values
 
-        lhs_targets = [cst.AssignTarget(cst.Name(value=name)) for name in self.names]
+        lhs_targets = [
+            cst.AssignTarget(
+                cst.Attribute(value=cst.Name("self"), attr=cst.Name(value=name))
+            )
+            for name in self.names
+        ]
 
         args = []
         if len(self.names) > 1:  # more than one element on lhs

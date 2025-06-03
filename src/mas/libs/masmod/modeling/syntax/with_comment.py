@@ -3,8 +3,37 @@ from typing import TypeVar
 import libcst as cst
 
 CommentableStatementT = TypeVar(
-    "CommentableStatementT", bound=cst.SimpleStatementLine | cst.EmptyLine
+    "CommentableStatementT",
+    bound=cst.BaseStatement | cst.EmptyLine,
 )
+
+TrailingCommentableStatementT = TypeVar(
+    "TrailingCommentableStatementT",
+    bound=cst.BaseStatement,
+)
+
+
+def with_trailing_comment(
+    statement: TrailingCommentableStatementT, comment: str
+) -> TrailingCommentableStatementT:
+    """
+    Add a trailing comment to a line of code.
+
+    Args:
+        statement (cst.BaseStatement): The line of code to which the comment will be added.
+        comment (str): The comment to be added.
+
+    Returns:
+        cst.BaseStatement: The modified line of code with the comment.
+    """
+    if not comment.startswith("#"):
+        comment = f"# {comment}"
+    return statement.with_changes(
+        trailing_whitespace=cst.TrailingWhitespace(
+            whitespace=cst.SimpleWhitespace("  "),
+            comment=cst.Comment(value=comment),
+        )
+    )
 
 
 def with_comment(
@@ -15,19 +44,21 @@ def with_comment(
 
     Args:
         statement (CommentableStatementT): The line of code to which the comment will be added.
+        comment (str): The comment to be added.
 
     Returns:
         CommentableStatementT: The modified line of code with the comment.
     """
     if not comment.startswith("#"):
         comment = f"# {comment}"
-    if isinstance(statement, cst.SimpleStatementLine):
-        # If the statement is a SimpleStatementLine, we can add a trailing comment
+    if isinstance(statement, cst.SimpleStatementLine | cst.BaseCompoundStatement):
+        # If the statement is a SimpleStatementLine or a BaseCompoundStatement, we put the comment
+        # as a leading line.
         return statement.with_changes(
-            trailing_whitespace=cst.TrailingWhitespace(
-                whitespace=cst.SimpleWhitespace("  "),
-                comment=cst.Comment(value=comment),
-            )
+            leading_lines=[
+                cst.EmptyLine(comment=cst.Comment(value=comment)),
+                *statement.leading_lines,
+            ]
         )
 
     if isinstance(statement, cst.EmptyLine):

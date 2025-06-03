@@ -5,7 +5,6 @@ from typing import Any, Literal, Sequence, overload
 import libcst as cst
 import numpy as np
 import numpy.typing as npt
-import polars as pl
 from typing_extensions import Self
 
 from mas.libs.masmod.modeling.module.defs.ode import odeint
@@ -15,8 +14,6 @@ from mas.libs.masmod.modeling.module.descriptor.common import (
 )
 from mas.libs.masmod.modeling.symbols._cmt import Compartment
 from mas.libs.masmod.modeling.symbols._column import (
-    AnyCategoricalColVar,
-    AnyColVar,
     ColVar,
 )
 from mas.libs.masmod.modeling.symbols._omega_eta import Eta, Omega

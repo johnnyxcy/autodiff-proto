@@ -50,7 +50,13 @@ class SharedVar(Symbol, CodeGen):
                 f"Cannot generate code for SharedVar with type '{self.dtype}' and value '{self.init_value}'"
             )
         return cst.Assign(
-            targets=[cst.AssignTarget(cst.Name(self.name))],
+            targets=[
+                cst.AssignTarget(
+                    cst.Attribute(
+                        value=cst.Name("self"), attr=cst.Name(value=self.name)
+                    )
+                )
+            ],
             value=value,
         )
 
