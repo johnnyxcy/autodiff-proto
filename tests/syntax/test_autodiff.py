@@ -4,12 +4,12 @@ import libcst as cst
 import pytest
 from sympy import exp
 
-from symbols._ns import SymbolNamespace
-from symbols._omega_eta import Eta
-from symbols._theta import Theta
-from syntax.rethrow import MTranError
-from syntax.transformers.autodiff import AutoDiffTransformer
-from syntax.unparse import unparse
+from mas.libs.masmod.modeling.symbols._ns import SymbolNamespace
+from mas.libs.masmod.modeling.symbols._omega_eta import Eta
+from mas.libs.masmod.modeling.symbols._theta import Theta
+from mas.libs.masmod.modeling.syntax.rethrow import MTranError
+from mas.libs.masmod.modeling.syntax.transformers.autodiff import AutoDiffTransformer
+from mas.libs.masmod.modeling.syntax.unparse import unparse
 
 
 def _transform(src: str, transformer: AutoDiffTransformer):

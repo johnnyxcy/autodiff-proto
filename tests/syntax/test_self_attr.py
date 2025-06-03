@@ -3,8 +3,8 @@ import inspect
 import libcst as cst
 from sympy import Symbol
 
-from syntax.transformers.self_attr import SelfAttrMangler
-from syntax.unparse import unparse
+from mas.libs.masmod.modeling.syntax.transformers.self_attr import SelfAttrMangler
+from mas.libs.masmod.modeling.syntax.unparse import unparse
 
 
 def test_simple_symbols():

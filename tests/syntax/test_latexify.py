@@ -3,9 +3,9 @@ import inspect
 import libcst as cst
 from sympy import exp
 
-from symbols._omega_eta import Eta
-from symbols._theta import Theta
-from syntax.visitor.latexify import LateXifyVisitor
+from mas.libs.masmod.modeling.symbols._omega_eta import Eta
+from mas.libs.masmod.modeling.symbols._theta import Theta
+from mas.libs.masmod.modeling.syntax.visitor.latexify import LateXifyVisitor
 
 
 def test_simple():

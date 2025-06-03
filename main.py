@@ -1,4 +1,4 @@
-from api import (
+from mas.libs.masmod.modeling.api import (
     OdeModule,
     column,
     compartment,
@@ -8,12 +8,12 @@ from api import (
     omega,
     theta,
 )
-from module.defs.ode import odeint
-from module.descriptor.cc import CCTranslator
-from module.descriptor.distillation import distill
-from symbols._sigma_eps import sigma
-from syntax.unparse import unparse
-from utils.loggings import logger
+from mas.libs.masmod.modeling.module.defs.ode import odeint
+from mas.libs.masmod.modeling.module.descriptor.cc import CCTranslator
+from mas.libs.masmod.modeling.module.descriptor.distillation import distill
+from mas.libs.masmod.modeling.symbols._sigma_eps import sigma
+from mas.libs.masmod.modeling.syntax.unparse import unparse
+from mas.libs.masmod.modeling.utils.loggings import logger
 
 logger.setLevel("DEBUG")
 

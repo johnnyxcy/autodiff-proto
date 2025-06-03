@@ -3,10 +3,14 @@ import inspect
 import libcst as cst
 import pytest
 
-from syntax.rethrow import MTranError
-from syntax.transformers.inline.flags import when_inline_transpile
-from syntax.transformers.inline.transpiler import InlineFunctionTranspiler
-from syntax.unparse import unparse
+from mas.libs.masmod.modeling.syntax.rethrow import MTranError
+from mas.libs.masmod.modeling.syntax.transformers.inline.flags import (
+    when_inline_transpile,
+)
+from mas.libs.masmod.modeling.syntax.transformers.inline.transpiler import (
+    InlineFunctionTranspiler,
+)
+from mas.libs.masmod.modeling.syntax.unparse import unparse
 
 
 def add(a, b=1):

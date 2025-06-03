@@ -34,6 +34,7 @@ include = ["src"]
 typeCheckingMode = "standard"
 pythonVersion = "3.13"
 include = ["src", "tests"]
+ignore = ["legacy"]
 
 strictListInference = true
 strictDictionaryInference = true

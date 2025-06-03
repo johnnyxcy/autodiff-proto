@@ -1,6 +1,6 @@
 import libcst as cst
 
-from syntax.transformers.super_call_fixer import SuperCallFixer
+from mas.libs.masmod.modeling.syntax.transformers.super_call_fixer import SuperCallFixer
 
 
 def test_super_call_fixer():
