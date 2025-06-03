@@ -4,7 +4,6 @@ import enum
 from typing import Any, Literal, Sequence, overload
 
 import libcst as cst
-from __version__ import __version__
 from libcst.metadata import (
     ExpressionContextProvider,
     ParentNodeProvider,
@@ -22,9 +21,8 @@ from sympy.core.relational import (
 )
 from sympy.parsing.sympy_parser import auto_symbol
 
-from mas.libs.masmod.modeling.module.descriptor.distillation import (
-    RuntimeModuleDescriptor,
-)
+from mas.libs.masmod.modeling.__version__ import __version__
+from mas.libs.masmod.modeling.module.descriptor.descriptor import ModuleDescriptor
 from mas.libs.masmod.modeling.symbols._args import (
     IndexedParamArg,
     ParamArg,
@@ -224,7 +222,7 @@ class CCTransPredVisitor(cst.CSTVisitor):
     def __init__(
         self,
         source_code: str,
-        descriptor: RuntimeModuleDescriptor,
+        descriptor: ModuleDescriptor,
         advan_trans: tuple[str, str] = ("ADVAN_UNKNOWN", "TRANS_UNKNOWN"),
     ):
         self._translated: list[str] = []
@@ -235,8 +233,8 @@ class CCTransPredVisitor(cst.CSTVisitor):
 
         self._declarations: dict[str, ValueType] = {}
 
-        self._locals = {
-            **self._descriptor.locals,
+        self._locals: dict[str, Any] = {
+            "self": descriptor.mod,
             XTransRack.name: XTransRack(),
             YTransRack.name: YTransRack(),
             FIRST_ORDER.name: FIRST_ORDER,
@@ -576,15 +574,17 @@ class CCTransPredVisitor(cst.CSTVisitor):
         if isinstance(expr, ClosedFormSolutionSolvedF):
             return f"{CLOSED_FORM_SOLUTION_VARNAME}.F()"
         if isinstance(expr, ClosedFormSolutionSolvedFWrt):
-            if isinstance(expr.wrt, Eta):
-                eta_index = self._descriptor.etas.index(expr.wrt)
-                return f"{CLOSED_FORM_SOLUTION_VARNAME}.F({eta_index})"
+            index = self._compute_solution_index(expr.wrt, expr.wrt2nd)
+            if index is None:
+                return "0."
+            return f"{CLOSED_FORM_SOLUTION_VARNAME}.F({index})"
         if isinstance(expr, ClosedFormSolutionSolvedA):
             return f"{CLOSED_FORM_SOLUTION_VARNAME}.A({expr.index})"
         if isinstance(expr, ClosedFormSolutionSolvedAWrt):
-            if isinstance(expr.wrt, Eta):
-                eta_index = self._descriptor.etas.index(expr.wrt)
-                return f"{CLOSED_FORM_SOLUTION_VARNAME}.A({expr.index, eta_index})"
+            index = self._compute_solution_index(expr.wrt, expr.wrt2nd)
+            if index is None:
+                return "0."
+            return f"{CLOSED_FORM_SOLUTION_VARNAME}.A({expr.index, index})"
 
         if isinstance(expr, CmtDADtWrt):
             index = self._compute_ode_index(
@@ -628,9 +628,13 @@ class CCTransPredVisitor(cst.CSTVisitor):
                     return f"{mask_self_attr(symbol.name)}"
             return expr.name
         if isinstance(expr, Add):
-            return " + ".join(self._translate_sympy(arg) for arg in expr.args)
+            return (
+                "(" + " + ".join(self._translate_sympy(arg) for arg in expr.args) + ")"
+            )
         if isinstance(expr, Mul):
-            return " * ".join(self._translate_sympy(arg) for arg in expr.args)
+            return (
+                "(" + " * ".join(self._translate_sympy(arg) for arg in expr.args) + ")"
+            )
         if isinstance(expr, exp):
             to = self._translate_sympy(expr.exp)
             return f"std::exp({to})"
@@ -693,6 +697,14 @@ class CCTransPredVisitor(cst.CSTVisitor):
 
         return None
 
+    def _get_cmt_index(self, cmt: Compartment) -> int:
+        cmt_index = -1
+        for i, cmt_ in enumerate(self._descriptor.cmts):
+            if cmt_.name == cmt.name:
+                cmt_index = i
+                break
+        return cmt_index
+
     def _compute_ode_index(
         self,
         cmt: Compartment,
@@ -701,7 +713,7 @@ class CCTransPredVisitor(cst.CSTVisitor):
     ) -> int | None:
         n_cmt = len(self._descriptor.cmts)
         n_eta = len(self._descriptor.etas)
-        cmt_index = self._descriptor.cmts.index(cmt)
+        cmt_index = self._get_cmt_index(cmt)
         if wrt is None:
             return cmt_index
         elif wrt2nd is None:  # only wrt is given
@@ -709,7 +721,7 @@ class CCTransPredVisitor(cst.CSTVisitor):
                 eta_index = self._descriptor.etas.index(wrt)
                 return n_cmt + eta_index * n_cmt + cmt_index
             elif isinstance(wrt, CmtSolvedA):
-                cmt2_index = self._descriptor.cmts.index(wrt.cmt)
+                cmt2_index = self._get_cmt_index(wrt.cmt)
                 return cmt_index * n_cmt + cmt2_index
             else:
                 return None
@@ -723,6 +735,24 @@ class CCTransPredVisitor(cst.CSTVisitor):
                 return n_cmt + n_cmt * n_eta + comb_index * n_cmt + cmt_index
             else:
                 return None
+
+    def _compute_solution_index(
+        self, wrt: Symbol | None = None, wrt2nd: Symbol | None = None
+    ) -> int | None:
+        """
+        Compute the index of the solution based on the wrt and wrt2nd.
+        """
+        n_eta = len(self._descriptor.etas)
+        if wrt is None and wrt2nd is None:
+            return 0
+
+        if isinstance(wrt, Eta) and isinstance(wrt2nd, Eta):
+            return 1 + n_eta + self._compute_eta_2nd_partial_index(wrt, wrt2nd)
+
+        if isinstance(wrt, Eta):
+            return 1 + self._descriptor.etas.index(wrt)
+
+        return None
 
     def _compute_eta_2nd_partial_index(self, eta_i: Eta, eta_j: Eta) -> int:
         # 下三角的索引
@@ -803,7 +833,7 @@ class CCTransPredVisitor(cst.CSTVisitor):
 
 
 class CCTranslator:
-    def __init__(self, descriptor: RuntimeModuleDescriptor):
+    def __init__(self, descriptor: ModuleDescriptor):
         self._descriptor = descriptor
 
         if descriptor.is_closed_form_solution:

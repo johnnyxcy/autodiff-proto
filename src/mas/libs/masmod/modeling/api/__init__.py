@@ -20,7 +20,7 @@ from mas.libs.masmod.modeling.functions.math import (
 from mas.libs.masmod.modeling.functions.stats import normal_cdf
 from mas.libs.masmod.modeling.module.closed_form_solutions import EvOneCmtLinear
 from mas.libs.masmod.modeling.module.defs.module import Module
-from mas.libs.masmod.modeling.module.defs.ode import OdeModule
+from mas.libs.masmod.modeling.module.defs.ode import OdeModule, odeint
 from mas.libs.masmod.modeling.symbols._cmt import compartment
 from mas.libs.masmod.modeling.symbols._column import column
 from mas.libs.masmod.modeling.symbols._omega_eta import (
@@ -36,6 +36,7 @@ from mas.libs.masmod.modeling.symbols._y import likelihood, prediction
 __all__ = [
     "Module",
     "OdeModule",
+    "odeint",
     "column",
     "omega",
     "omega_iov",

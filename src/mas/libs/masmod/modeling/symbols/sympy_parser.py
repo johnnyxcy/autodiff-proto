@@ -18,6 +18,7 @@ from sympy import (
 )
 from sympy.core.relational import Relational
 
+from mas.libs.masmod.modeling.symbols._x import XWrt
 from mas.libs.masmod.modeling.typings import AsCSTExpression
 
 
@@ -65,6 +66,8 @@ def parse_sympy_expr(expr: Basic | int | float) -> cst.BaseExpression:
                     left=translated,
                     operator=cst.Add(),
                     right=parse_sympy_expr(token),
+                    lpar=[cst.LeftParen()],
+                    rpar=[cst.RightParen()],
                 )
         if translated is None:
             return cst.Integer(value="0")
@@ -82,6 +85,8 @@ def parse_sympy_expr(expr: Basic | int | float) -> cst.BaseExpression:
                     left=translated,
                     operator=cst.Multiply(),
                     right=parse_sympy_expr(token),
+                    lpar=[cst.LeftParen()],
+                    rpar=[cst.RightParen()],
                 )
         if translated is None:
             return cst.Integer(value="0")
@@ -95,6 +100,8 @@ def parse_sympy_expr(expr: Basic | int | float) -> cst.BaseExpression:
             left=base,
             operator=cst.Power(),
             right=exp_,
+            lpar=[cst.LeftParen()],
+            rpar=[cst.RightParen()],
         )
 
     if isinstance(expr, Rational):
@@ -102,6 +109,8 @@ def parse_sympy_expr(expr: Basic | int | float) -> cst.BaseExpression:
             left=parse_sympy_expr(expr.numerator),
             operator=cst.Divide(),
             right=parse_sympy_expr(expr.denominator),
+            lpar=[cst.LeftParen()],
+            rpar=[cst.RightParen()],
         )
 
     if isinstance(expr, Relational):
@@ -133,6 +142,8 @@ def parse_sympy_expr(expr: Basic | int | float) -> cst.BaseExpression:
         return cst.Call(
             func=cst.Name("exp"),
             args=[cst.Arg(value=parse_sympy_expr(exp_))],
+            lpar=[cst.LeftParen()],
+            rpar=[cst.RightParen()],
         )
 
     if isinstance(expr, Derivative):
@@ -145,7 +156,6 @@ def parse_sympy_expr(expr: Basic | int | float) -> cst.BaseExpression:
                 raise NotImplementedError(
                     "Only single variable differentiation is supported"
                 )
-            from mas.libs.masmod.modeling.symbols._x import XWrt
 
             return XWrt(on_name, wrt[0]).as_cst_expression()
 

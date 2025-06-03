@@ -1,4 +1,6 @@
+# ruff: noqa: F401
 from mas.libs.masmod.modeling.api import (
+    EvOneCmtLinear,
     OdeModule,
     column,
     compartment,
@@ -10,7 +12,7 @@ from mas.libs.masmod.modeling.api import (
 )
 from mas.libs.masmod.modeling.module.defs.ode import odeint
 from mas.libs.masmod.modeling.module.descriptor.cc import CCTranslator
-from mas.libs.masmod.modeling.module.descriptor.distillation import distill
+from mas.libs.masmod.modeling.module.descriptor.descriptor import ModuleDescriptor
 from mas.libs.masmod.modeling.symbols._sigma_eps import sigma
 from mas.libs.masmod.modeling.syntax.unparse import unparse
 from mas.libs.masmod.modeling.utils.loggings import logger
@@ -26,61 +28,63 @@ def add(a, b):
     return a + b
 
 
-class MyDef(OdeModule):
-    def __init__(self):
-        super().__init__(odeint.DVERK(tol=1e-10))
-        self.pop_cl = theta(1.0)
-        self.pop_v = theta(10.0)
-        self.pop_ka = theta(1.0)
-        self.iiv_cl = omega(0.1)
-        self.iiv_v = omega(0.1)
-        self.iiv_ka = omega(0.1)
-        self.cmt1 = compartment()
-        self.cmt2 = compartment()
-        self.eps_add = sigma(0.1)
-
-        self.DV = column("DV")
-
-    def pred(self):
-        cl = self.pop_cl * exp(self.iiv_cl)
-        v = self.pop_v * exp(self.iiv_v)
-        ka = self.pop_ka * exp(self.iiv_ka)
-
-        k = cl / v
-        self.cmt1.dAdt = -ka * self.cmt1.A
-        self.cmt2.dAdt = ka * self.cmt1.A - k * self.cmt2.A
-
-        IPRED = self.cmt2.A / v
-        if IPRED < 0:
-            RES = self.DV - IPRED
-            CUM = normal_cdf(RES)
-            return likelihood(CUM)
-
-        return IPRED + self.eps_add
-
-
-# class MyDef(EvOneCmtLinear.Physio):
+# class MyDef(OdeModule):
 #     def __init__(self):
-#         super().__init__()
+#         super().__init__(odeint.DVERK(tol=1e-10))
 #         self.pop_cl = theta(1.0)
 #         self.pop_v = theta(10.0)
 #         self.pop_ka = theta(1.0)
 #         self.iiv_cl = omega(0.1)
 #         self.iiv_v = omega(0.1)
 #         self.iiv_ka = omega(0.1)
+#         self.cmt1 = compartment()
+#         self.cmt2 = compartment()
+#         self.eps_add = sigma(0.1)
+
+#         self.DV = column("DV")
 
 #     def pred(self):
-#         v = self.pop_v * exp(self.iiv_v)  # Volume(ng/mL)
-#         F = self.solve(
-#             cl=self.pop_cl * exp(self.iiv_cl),
-#             v=v,
-#             ka=self.pop_ka * exp(self.iiv_ka),
-#             alag1=0.1,
-#         )
+#         cl = self.pop_cl * exp(self.iiv_cl)
+#         v = self.pop_v * exp(self.iiv_v)
+#         ka = self.pop_ka * exp(self.iiv_ka)
 
-#         IPRED = F
+#         k = cl / v
+#         self.cmt1.dAdt = -ka * self.cmt1.A
+#         self.cmt2.dAdt = ka * self.cmt1.A - k * self.cmt2.A
 
-#         return IPRED
+#         IPRED = self.cmt2.A / v
+#         # if IPRED < 0:
+#         #     RES = self.DV - IPRED
+#         #     CUM = normal_cdf(RES)
+#         #     return likelihood(CUM)
+
+#         return IPRED + self.eps_add
+
+
+class MyDef(EvOneCmtLinear.Physio):
+    def __init__(self):
+        super().__init__()
+        self.pop_cl = theta(1.0)
+        self.pop_v = theta(10.0)
+        self.pop_ka = theta(1.0)
+        self.iiv_cl = omega(0.1)
+        self.iiv_v = omega(0.1)
+        self.iiv_ka = omega(0.1)
+        self.eps_add = sigma(0.1)
+        self.eps_prop = sigma(0.1)
+
+    def pred(self):
+        v = self.pop_v * exp(self.iiv_v)  # Volume(ng/mL)
+        F = self.solve(
+            cl=self.pop_cl * exp(self.iiv_cl),
+            v=v,
+            ka=self.pop_ka * exp(self.iiv_ka),
+            alag1=0.1,
+        )
+
+        IPRED = F
+
+        return IPRED * (1 + self.eps_prop) + self.eps_add
 
 
 if __name__ == "__main__":
@@ -97,8 +101,13 @@ if __name__ == "__main__":
 
     #     print("11")
 
-    interpreted = distill(my_def)
+    descriptor = ModuleDescriptor.from_module(my_def)
+    with open("out.py", "w") as f:
+        f.write(descriptor.postprocessed_pred.src)
 
-    print(unparse(interpreted._code_gen()))
+    # print(unparse(descriptor._code_gen()))
 
-    print("\n".join(CCTranslator(descriptor=interpreted).translate()))
+    translated = "\n".join(CCTranslator(descriptor=descriptor).translate())
+
+    with open("out_cc.cc", "w") as f:
+        f.write(translated)

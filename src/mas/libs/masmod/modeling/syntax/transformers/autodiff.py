@@ -246,30 +246,45 @@ class AutoDiffTransformer(cst.CSTTransformer):
                 first_order_derivatives.append((wrt, value_wrt_var))
 
                 for j, wrt2nd in enumerate(wrt_symbols):
-                    # ∂²Z/∂ηᵢ∂ηⱼ or ∂²Z/∂∂ηᵢ∂εⱼ
-                    if isinstance(wrt, Eta) and isinstance(wrt2nd, Eta):
-                        # We only compute second order derivatives for η
-                        if i < j:
+                    if isinstance(wrt, Eta):
+                        deriv_2nd = None
+                        # ∂²Z/∂ηᵢ∂ηⱼ
+                        if isinstance(wrt2nd, Eta):
                             # since it is symmetric, we only compute the lower triangle
-                            continue
+                            if i < j:
+                                continue
+                            if issubclass(self._module_cls, OdeModule):
+                                deriv_2nd = (
+                                    self._compute_ode_value_2nd_mixed_partial_deriv(
+                                        value=value,
+                                        wrt=wrt,
+                                        wrt2nd=wrt2nd,
+                                        scope=scope,
+                                    )
+                                )
+                            elif issubclass(self._module_cls, ClosedFormSolutionModule):
+                                deriv_2nd = self._compute_closed_form_value_2nd_mixed_partial_deriv(
+                                    value=value,
+                                    wrt=wrt,
+                                    wrt2nd=wrt2nd,
+                                    scope=scope,
+                                )
+                        # ∂²Z/∂∂ηᵢ∂εⱼ
+                        elif isinstance(wrt2nd, Eps):
+                            deriv_2nd = value_wrt_var.diff(wrt2nd)
+                            for symbol in value.free_symbols:
+                                if isinstance(symbol, Symbol) and symbol.name in scope:
+                                    deriv_2nd += value_wrt_var.diff(symbol) * XWrt(
+                                        symbol.name, wrt2nd
+                                    )
 
-                        second_order_derivatives.append(
-                            (
-                                (wrt, wrt2nd),
-                                self._compute_ode_value_2nd_mixed_partial_deriv(
-                                    value=value, wrt=wrt, wrt2nd=wrt2nd
-                                ),
+                        if deriv_2nd is not None:
+                            second_order_derivatives.append(
+                                (
+                                    (wrt, wrt2nd),
+                                    deriv_2nd,
+                                )
                             )
-                        )
-                    elif isinstance(wrt, Eta) and isinstance(wrt2nd, Eps):
-                        second_order_derivatives.append(
-                            (
-                                (wrt, wrt2nd),
-                                self._compute_ode_value_2nd_mixed_partial_deriv(
-                                    value=value, wrt=wrt, wrt2nd=wrt2nd
-                                ),
-                            )
-                        )
 
             # if Ode, we also need to compute derivatives w.r.t. A(i)
             if issubclass(self._module_cls, OdeModule):
@@ -987,7 +1002,11 @@ class AutoDiffTransformer(cst.CSTTransformer):
         return suite.with_changes(body=new_body)
 
     def _compute_ode_value_2nd_mixed_partial_deriv(
-        self, value: Expr, wrt: Symbol, wrt2nd: Symbol
+        self,
+        value: Expr,
+        wrt: Eta,
+        wrt2nd: Eta,
+        scope: Scope,
     ) -> Expr:
         """
 
@@ -1024,10 +1043,20 @@ class AutoDiffTransformer(cst.CSTTransformer):
 
             zuv += yAi * Aiuv
 
+        for symbol in value.free_symbols:
+            if isinstance(symbol, Symbol) and symbol.name in scope:
+                zuv += value.diff(wrt, symbol) * XWrt(symbol.name, wrt2nd) + value.diff(
+                    symbol
+                ) * XWrt(symbol.name, wrt, wrt2nd)
+
         return zuv
 
     def _compute_closed_form_value_2nd_mixed_partial_deriv(
-        self, value: Expr, wrt: Symbol, wrt2nd: Symbol
+        self,
+        value: Expr,
+        wrt: Eta,
+        wrt2nd: Eta,
+        scope: Scope,
     ) -> Expr:
         """
         Formula:
@@ -1085,6 +1114,12 @@ class AutoDiffTransformer(cst.CSTTransformer):
                 zuv += yAiAj * Aju * Aiv
 
             zuv += yAi * Aiuv
+
+        for symbol in value.free_symbols:
+            if isinstance(symbol, Symbol) and symbol.name in scope:
+                zuv += value.diff(wrt, symbol) * XWrt(symbol.name, wrt2nd) + value.diff(
+                    symbol
+                ) * XWrt(symbol.name, wrt, wrt2nd)
 
         return zuv
 
